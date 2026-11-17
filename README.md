@@ -19,4 +19,4 @@ npm run test:e2e
 
 ## GitHub Pages
 
-`main` へのpush時、GitHub Actionsがテスト・ビルド後にPagesへデプロイします。Actionsの `configure-pages` がPagesを有効化します。ビルド時の `GITHUB_PAGES=true` により、Viteの `base` は `/<repository>/` になります。Pull Requestでは検証だけ実行します。失敗時はActionsのログと `browser-report-*` artifactで原因を確認できます。
+`main` へのpush時、GitHub Actionsがテスト・ビルド後にPagesへデプロイします。初回のみ、リポジトリ設定の **Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選択してください。ビルド時の `GITHUB_PAGES=true` により、Viteの `base` は `/<repository>/` になります。Pull Requestでは検証だけ実行します。失敗時はActionsのログと `browser-report-*` artifactで原因を確認できます。
