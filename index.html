@@ -3,21 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23438bd4'/%3E%3C/svg%3E" />
-    <title>小さな戦略RPG</title>
+    <meta name="theme-color" content="#122b38" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%231b4353'/%3E%3Cpath d='M17 48L32 10l15 38H37l-5-13-5 13z' fill='%23e9c778'/%3E%3C/svg%3E" />
+    <title>蒼の境界 | 小さな戦略RPG</title>
   </head>
   <body>
     <main>
-      <header><div><span class="eyebrow">TACTICAL RPG · PROTOTYPE</span><h1>小さな戦略RPG</h1></div><p>青の部隊を動かして、赤の部隊と戦おう。</p></header>
-      <section class="game-layout" aria-label="ゲーム">
-        <div id="game" aria-label="戦場"></div>
-        <aside>
-          <h2 id="turn-label">青のターン</h2>
-          <p id="status" role="status">青いユニットを選択してください。</p>
-          <button id="end-turn" type="button">ターン終了 →</button>
-          <div class="legend"><h3>操作</h3><p><span class="swatch move"></span>移動できる場所</p><p><span class="swatch attack"></span>攻撃範囲</p><p>ユニットを選び、色のついたマスをクリック。攻撃は隣の敵をクリックします。</p></div>
+      <header class="masthead">
+        <div class="brand-mark" aria-hidden="true">✦</div>
+        <div class="brand-copy">
+          <div class="eyebrow">TACTICAL CHRONICLE <span>·</span> CHAPTER 01</div>
+          <h1>蒼の境界 <small>— あおのきょうかい —</small></h1>
+          <p>古い峠に迫る敵を退け、夜明けまで防衛線を守れ。</p>
+        </div>
+        <div class="chapter-seal" aria-hidden="true"><span>01</span><small>峠の防衛</small></div>
+      </header>
+
+      <div class="mission-strip"><span class="diamond">◆</span><strong>勝利条件</strong><span>敵部隊を全滅させる</span><span class="mission-note">2人の仲間を指揮して戦おう</span></div>
+      <section class="game-layout" aria-label="戦闘画面">
+        <div class="battle-frame">
+          <div class="battle-topline"><span>古い峠 <small>／ LOWLAND PASS</small></span><span>MISSION 01</span></div>
+          <div id="game" aria-label="8列6行の戦場"></div>
+          <div id="phase-banner" class="phase-banner" aria-live="polite"></div>
+          <div id="outcome" class="outcome" hidden>
+            <div class="outcome-card"><span class="eyebrow">BATTLE RESULT</span><h2 id="outcome-heading"></h2><p id="outcome-copy"></p><button id="restart-outcome" type="button">もう一度戦う ↻</button></div>
+          </div>
+          <div class="battle-bottomline"><span>■ 移動</span><span>□ 攻撃</span><span>味方を選択して行動</span></div>
+        </div>
+        <aside class="command-panel">
+          <div class="panel-label">COMMAND / 戦況</div>
+          <h2 id="turn-label">PLAYER PHASE · 1</h2>
+          <div class="status-box"><span class="status-icon">✦</span><p id="status" role="status">青のユニットを選択してください。</p></div>
+          <div class="selected-card"><span class="panel-label">選択中のユニット</span><strong id="selected-name">ユニットを選択</strong><p id="selected-detail">青のユニットをクリックして行動を決めます。</p></div>
+          <div class="roster-section"><span class="panel-label">味方部隊</span><div id="roster"></div></div>
+          <button id="end-turn" class="primary-button" type="button">行動を終える <span>→</span></button>
+          <div class="toolbar"><button id="sound-toggle" type="button">♪ 音声 ON</button><button id="restart" type="button">↻ はじめから</button></div>
+          <div class="legend"><h3>あそびかた</h3><p><span class="swatch move"></span>緑のマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p>仲間を選択して行動します。敵はターン終了後に自動で動きます。</p></div>
         </aside>
       </section>
+      <footer>PIXEL BATTLE SYSTEM · ORIGINAL PROCEDURAL ART &amp; SYNTH SOUND</footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

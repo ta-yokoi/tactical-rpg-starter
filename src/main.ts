@@ -4,7 +4,7 @@ import type { GameState } from './game/rules';
 import './style.css';
 
 declare global {
-  interface Window { __GAME_TEST__?: { getState: () => GameState } }
+  interface Window { __GAME_TEST__?: { getState: () => GameState; isBusy: () => boolean } }
 }
 
 new Phaser.Game({
@@ -12,8 +12,8 @@ new Phaser.Game({
   parent: 'game',
   width: 616,
   height: 472,
-  backgroundColor: '#26313a',
+  backgroundColor: '#213d4b',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BattleScene],
-  render: { pixelArt: false, antialias: true },
+  render: { pixelArt: true, antialias: false, roundPixels: true },
 });

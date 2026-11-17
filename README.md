@@ -1,22 +1,26 @@
-# 小さな戦略RPG
+# 蒼の境界 — 小さな戦略RPG
 
-TypeScript strict mode、Phaser、Viteによるブラウザ向け2D戦略RPGの最小構成です。画像ファイルは使わず、Phaserの図形描画でマップとユニットを表示します。
+オリジナルのピクセル戦略RPGの縦切りです。青の2人を指揮して峠の敵2人を倒します。敵ターンは自動進行し、勝敗後は再戦できます。地形とユニットは実行時に図形から生成し、音楽と効果音はWeb Audioで合成します。画像・音声ファイルは使いません。
 
-## 起動・検証
+## Codex Cloudで起動・検証
 
 ```sh
 npm ci
-npx playwright install chromium
+# Playwright標準Chromiumを取得できない環境では、システムのChromiumを指定する
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e
 npm run dev
 npm run test
 npm run build
-npm run test:e2e
 ```
 
-青の部隊から始まります。ユニットをクリックすると移動範囲（緑）と隣接する攻撃範囲（橙の枠）が表示されます。移動先または敵をクリックして行動し、「ターン終了」で陣営を交代します。両陣営とも手動操作です。各ユニットは1ターンにつき3マスまで移動し、隣接する敵を1回攻撃できます。敵のHPを0にして全滅させると勝利です。
+`npm run build` はTypeScript strict検査、Viteビルド、容量検査を実行します。通常の環境では `npx playwright install chromium` 後に `npm run test:e2e` を実行できます。CIではPlaywrightのChromiumを自動インストールします。
 
-ゲームルールは `src/game/rules.ts` の純粋関数にあり、描画と入力は `src/scene/BattleScene.ts` にあります。E2Eテストは `window.__GAME_TEST__.getState()` でゲーム状態のコピーを参照できます。ブラウザのエラーと最後の状態はテストレポートに添付され、スクリーンショットは `test-results/` に保存されます。
+味方を選択すると移動可能なマスが緑、攻撃範囲が橙で表示されます。1ターンにつき1人あたり最大3マス移動し、隣接する敵を1回攻撃できます。移動後の攻撃も可能です。「行動を終える」で敵AIが行動します。「♪ 音声」で合成音声を切り替えられます。
 
-## GitHub Pages
+ゲームルールと敵AIは `src/game/` の純粋関数、描画・アニメーション・入力は `src/scene/`、合成音声は `src/audio/` にあります。E2Eテストは `window.__GAME_TEST__.getState()` で状態のコピーを読み、`isBusy()` でアニメーション完了を待ちます。テスト結果のスクリーンショット、ブラウザエラー、最後のゲーム状態は `test-results/` とPlaywrightレポートに残ります。
 
-`main` へのpush時、GitHub Actionsがテスト・ビルド後にPagesへデプロイします。初回のみ、リポジトリ設定の **Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選択してください。ビルド時の `GITHUB_PAGES=true` により、Viteの `base` は `/<repository>/` になります。Pull Requestでは検証だけ実行します。失敗時はActionsのログと `browser-report-*` artifactで原因を確認できます。
+## 配信と容量
+
+`main` にpushするとGitHub ActionsがVitest、ビルド、Playwrightを実行してGitHub Pagesへデプロイします。Pull Requestでは検証のみ実行します。PagesのSourceは初回のみGitHub Actionsに設定します。`GITHUB_PAGES=true` でViteの `base` を `/<repository>/` に切り替えます。
+
+`scripts/size-report.mjs` がgzip換算の初回転送量を2MiB以下、画像と音声それぞれの生データを500KiB以下に制限します。実測値と次の改善計画は [マイルストーン記録](docs/milestone-1.md) を参照してください。

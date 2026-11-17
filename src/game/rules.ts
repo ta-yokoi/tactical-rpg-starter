@@ -1,6 +1,6 @@
 export type Team = 'blue' | 'red';
 export type Point = { x: number; y: number };
-export type Unit = Point & { id: string; team: Team; hp: number; moved: boolean; attacked: boolean };
+export type Unit = Point & { id: string; team: Team; hp: number; maxHp: number; moved: boolean; attacked: boolean };
 export type GameState = {
   width: number;
   height: number;
@@ -13,7 +13,7 @@ export type GameState = {
   message: string;
 };
 export type Action = { type: 'select'; id: string } | { type: 'move'; x: number; y: number } |
-  { type: 'attack'; id: string } | { type: 'endTurn' };
+  { type: 'attack'; id: string } | { type: 'endTurn' } | { type: 'restart' };
 
 const key = ({ x, y }: Point): string => `${x},${y}`;
 const distance = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -25,10 +25,10 @@ export function initialState(): GameState {
   return {
     width: 8, height: 6, walls: [{ x: 3, y: 2 }, { x: 4, y: 2 }, { x: 3, y: 3 }],
     units: [
-      { id: 'blue-1', team: 'blue', x: 1, y: 1, hp: 3, moved: false, attacked: false },
-      { id: 'blue-2', team: 'blue', x: 1, y: 4, hp: 3, moved: false, attacked: false },
-      { id: 'red-1', team: 'red', x: 6, y: 1, hp: 3, moved: false, attacked: false },
-      { id: 'red-2', team: 'red', x: 6, y: 4, hp: 3, moved: false, attacked: false },
+      { id: 'blue-1', team: 'blue', x: 1, y: 1, hp: 5, maxHp: 5, moved: false, attacked: false },
+      { id: 'blue-2', team: 'blue', x: 1, y: 4, hp: 5, maxHp: 5, moved: false, attacked: false },
+      { id: 'red-1', team: 'red', x: 6, y: 1, hp: 3, maxHp: 3, moved: false, attacked: false },
+      { id: 'red-2', team: 'red', x: 6, y: 4, hp: 3, maxHp: 3, moved: false, attacked: false },
     ], turn: 'blue', turnNumber: 1, selectedId: null, winner: null,
     message: '青いユニットを選択してください。',
   };
@@ -70,6 +70,7 @@ export function attackRange(state: GameState, id: string): Point[] {
 }
 
 export function reduceGame(state: GameState, action: Action): GameState {
+  if (action.type === 'restart') return initialState();
   if (state.winner) return state;
   const next = copy(state);
   if (action.type === 'endTurn') {
