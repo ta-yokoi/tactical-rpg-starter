@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23438bd4'/%3E%3C/svg%3E" />
+    <title>小さな戦略RPG</title>
+  </head>
+  <body>
+    <main>
+      <header><div><span class="eyebrow">TACTICAL RPG · PROTOTYPE</span><h1>小さな戦略RPG</h1></div><p>青の部隊を動かして、赤の部隊と戦おう。</p></header>
+      <section class="game-layout" aria-label="ゲーム">
+        <div id="game" aria-label="戦場"></div>
+        <aside>
+          <h2 id="turn-label">青のターン</h2>
+          <p id="status" role="status">青いユニットを選択してください。</p>
+          <button id="end-turn" type="button">ターン終了 →</button>
+          <div class="legend"><h3>操作</h3><p><span class="swatch move"></span>移動できる場所</p><p><span class="swatch attack"></span>攻撃範囲</p><p>ユニットを選び、色のついたマスをクリック。攻撃は隣の敵をクリックします。</p></div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
