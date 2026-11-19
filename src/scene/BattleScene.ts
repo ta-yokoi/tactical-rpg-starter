@@ -20,7 +20,7 @@ const strikeName = (unit: Unit): string => unitProfile(unit.id).reach === 1 ? 'æ
 
 type UnitView = {
   body: Phaser.GameObjects.Container;
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   health: Phaser.GameObjects.Graphics;
 };
 
@@ -30,6 +30,7 @@ export class BattleScene extends Phaser.Scene {
   private marks!: Phaser.GameObjects.Graphics;
   private cursorLayer!: Phaser.GameObjects.Graphics;
   private readonly views = new Map<string, UnitView>();
+  private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private readonly soundKit = new Chiptune();
   private busy = false;
   private cursor: Point | null = null;
@@ -43,7 +44,7 @@ export class BattleScene extends Phaser.Scene {
 
   create(): void {
     createPixelArt(this);
-    this.combatStage = new CombatStage();
+    this.combatStage = new CombatStage(ms => this.pause(ms));
     this.battlefield = this.add.layer().setDepth(-2);
     let resumed = false;
     try {
@@ -428,11 +429,15 @@ export class BattleScene extends Phaser.Scene {
     this.state = next;
     this.drawUi();
     if (source && moved) {
-      const { body } = this.views.get(source.id)!;
+      const { body, sprite } = this.views.get(source.id)!;
       this.soundKit.play('move');
+      if (!this.reduceMotion.matches) sprite.play(`${source.id}-walk`);
       for (const point of movementPath(previous, source.id, moved)) {
-        await this.tween(body, { ...center(point), duration: 105, ease: 'Sine.easeInOut' });
+        const position = center(point);
+        if (position.x !== body.x) sprite.setFlipX(position.x < body.x);
+        await this.tween(body, { ...center(point), duration: 116, ease: 'Sine.easeInOut' });
       }
+      sprite.stop();
     } else if (!hit) {
       this.soundKit.play('select');
     }
@@ -450,8 +455,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async showHit(source: Unit, target: Unit, strike: Strike, counter: boolean): Promise<void> {
-    this.combatStage.windup(strike, counter);
-    await this.pause(duelTiming[unitProfile(source.id).style]);
+    await this.combatStage.windup(strike, counter);
     this.soundKit.play('attack');
     const { damage, remainingHp } = strike;
     this.combatStage.impact(strike);
@@ -460,7 +464,7 @@ export class BattleScene extends Phaser.Scene {
     this.soundKit.play('hurt');
     const victim = this.views.get(target.id)!;
     this.updateHealth(victim, { ...target, hp: remainingHp });
-    await this.pause(duelTiming.impact);
+    await this.combatStage.recover(strike);
     if (remainingHp === 0) {
       this.combatStage.fall(target.id);
       await this.pause(160);
@@ -475,7 +479,7 @@ export class BattleScene extends Phaser.Scene {
     for (const unit of this.state.units) {
       const { x, y } = center(unit);
       const shadow = this.add.ellipse(0, 5, 13, 4, 0x233641, .7);
-      const sprite = this.add.image(0, -1, 'battle-art', unit.id).setFlipX(unit.team === 'red');
+      const sprite = this.add.sprite(0, -2, 'battle-art', `${unit.id}-idle`).setFlipX(unit.team === 'red');
       const health = this.add.graphics();
       const body = this.add.container(x, y, [shadow, sprite, health]).setDepth(2);
       const view = { body, sprite, health };
@@ -489,7 +493,11 @@ export class BattleScene extends Phaser.Scene {
     bar.fillStyle(0x20303a).fillRect(-8, 7, 16, 3);
     bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-7, 8, Math.round(14 * unit.hp / unit.maxHp), 1);
     bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-9, 4, 2, 2);
-    view.sprite.setAlpha(unit.attacked ? .73 : 1);
+    if (!view.sprite.anims.isPlaying) {
+      const poised = unit.id === this.state.selectedId && !unit.attacked;
+      view.sprite.setFrame(`${unit.id}-${poised ? 'ready' : 'idle'}`);
+    }
+    view.sprite.setAlpha(unit.attacked ? .74 : 1);
   }
 
   private showBanner(phase: string, title: string): void {

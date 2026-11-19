@@ -61,6 +61,19 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
     await expect(page.locator('#tile-detail')).toContainText('移動 3マス');
     await expect(page.locator('#terrain-chip')).toContainText('道');
     await page.screenshot({ path: testInfo.outputPath('battle-route.png'), fullPage: true });
+    const observedMotions = await page.locator('#combat-stage').evaluateHandle(stage => {
+      const seen = new Map<string, Set<string>>();
+      new MutationObserver(() => {
+        const motion = stage.getAttribute('data-motion');
+        if (stage.hasAttribute('hidden') || !motion) return;
+        const side = stage.classList.contains('left') ? 'left' : 'right';
+        const pose = stage.querySelector(`#stage-${side}`)?.getAttribute('data-pose');
+        if (!pose) return;
+        if (!seen.has(motion)) seen.set(motion, new Set());
+        seen.get(motion)!.add(pose);
+      }).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'data-pose'] });
+      return seen;
+    });
     let capturedImpact = false;
     let capturedBlade = false;
     // Open with Lina’s spell, finish the mage with Astel, then attack the raider from cover.
@@ -127,6 +140,12 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
       await expect.poll(async () => { const result = await state(); return result.winner || (result.turn === 'blue' && !await page.evaluate(() => window.__GAME_TEST__!.isBusy())); }, { timeout: 15_000 }).toBeTruthy();
       if ((await state()).winner) break;
     }
+    const motions = await observedMotions.evaluate(seen =>
+      Object.fromEntries([...seen].map(([motion, poses]) => [motion, [...poses]])));
+    for (const motion of ['sword', 'axe', 'spell']) {
+      expect(motions[motion]).toEqual(expect.arrayContaining(['windup', 'advance', 'release', 'strike', 'recover']));
+    }
+    await observedMotions.dispose();
     expect((await state()).winner).toBe('blue');
     await expect(page.getByRole('heading', { name: '戦いに勝利！' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('battle-victory.png'), fullPage: true });

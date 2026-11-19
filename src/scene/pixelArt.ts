@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { TILE } from './board';
+import { drawMapUnit, mapPoses, mapUnitIds } from './mapUnits';
 
 type Pixel = (x: number, y: number, w: number, h: number, color: string) => void;
 
@@ -9,44 +10,9 @@ const grassLight = '#85a459';
 const clay = '#bfa273';
 const clayShade = '#9b805c';
 
-// Each character uses the same outline, skin and brass colors, with team accent ramps.
-const shared = { k: '#202b37', s: '#e9b386', h: '#a26b63', g: '#efd38b', w: '#f2eed1' };
-const portraits = {
-  'blue-1': [
-    '......ggk.......', '.....kgabk......', '....kbaabbk...wk', '....kabsssk..wwk',
-    '....kbshsk..wwk.', '.....ksskk.wwk..', '...kkbwwbaakw...', '..kaabgbbkak....',
-    '.kabbbbaakak....', '.kabbwbbaakk....', '.kaabgbbbk......', '..kaabakbk......',
-    '...kkabkak......', '....kakkkbk.....', '...kbbk.kbbk....', '...kkk..kkk.....',
-  ],
-  'blue-2': [
-    '......kwk.......', '.....kagbk...g..', '....kaaabbk.gwg.', '...kababbbbk.g..',
-    '..kkkkkkkkkk.k..', '....kshssk...k..', '.....ksskk...k..', '....kbaagkk.kg..',
-    '...kabababskkg..', '..kabaababkk.k..', '..kbabgabk...k..', '..kabababk...k..',
-    '.kaabababbk..k..', '.kabbbbaabk..k..', '...kkwkwkk......', '....kk.kk.......',
-  ],
-  'blue-escort': [
-    '......ggg.......', '.....kgagk......', '...kkagaggkk....', '..kgggggggggk...',
-    '...kkkkkkkkk....', '.....kshsk......', '.....ksskk...k..', '....kabagk..kwk.',
-    '...kaagabbk.kgk.', '...kbabagsskkgk.', '...kbaabbkk..k..', '..kabaabak...k..',
-    '..kbabbaak...k..', '...kbbabkk...k..', '...kkk.kk.......', '................',
-  ],
-  'red-1': [
-    '...gk......kg...', '...kgk.kk.kgk...', '....kgbbbbgk....', '....kbaaaabk.wk.',
-    '....kbshssk.kwkk', '.....kksskk.kwwk', '...kkaaabkk..kk.', '..kaabbabbakkg..',
-    '..kaababbbsskg..', '...kkabgbbkk.k..', '....kabbbk...k..', '....kbkkbk...k..',
-    '...kbk..kbk..k..', '...kak..kbk.....', '..kbbk..kbbk....', '..kkk....kkk....',
-  ],
-  'red-2': [
-    '......kk........', '.....kabk....a..', '....kaabbk..agw.', '...kaabbbbk..a..',
-    '...kabkkkkk..k..', '...kbkhshbk..k..', '...kbbkskbk..k..', '...kbaakabk..k..',
-    '..kabaagbaabks..', '..kababbabbkkk..', '..kabbgbabbk.k..', '.kabbabbabbk.k..',
-    '.kaabbbaaabk.k..', '..kbbbbbbbk..k..', '...kkwkwkk......', '....kk.kk.......',
-  ],
-};
-
 export function createPixelArt(scene: Phaser.Scene): void {
   if (scene.textures.exists('battle-art')) return;
-  const texture = scene.textures.createCanvas('battle-art', TILE * (13 + Object.keys(portraits).length), TILE)!;
+  const texture = scene.textures.createCanvas('battle-art', TILE * (13 + mapUnitIds.length * mapPoses.length), TILE)!;
   const context = texture.getContext();
   let offset = 0;
   const frame = (name: string, draw: (pixel: Pixel) => void): void => {
@@ -154,14 +120,21 @@ export function createPixelArt(scene: Phaser.Scene): void {
     p(7, 9, 6, 3, '#453f41'); p(8, 7, 4, 3, '#ec9d61');
     p(9, 6, 2, 4, '#f9e696');
   });
-  for (const [id, rows] of Object.entries(portraits)) {
-    const colors: Record<string, string> = { ...shared,
-      a: id === 'blue-1' ? '#78bdd0' : id === 'blue-2' ? '#a7a4e0' : id === 'blue-escort' ? '#77c9a1' : '#db876d',
-      b: id === 'blue-1' ? '#39698f' : id === 'blue-2' ? '#665b9b' : id === 'blue-escort' ? '#387e68' : '#984e54',
-    };
-    frame(id, p => rows.forEach((row, y) => [...row].forEach((symbol, x) => {
-      if (symbol !== '.') p(x + 2, y + 1, 1, 1, colors[symbol]);
-    })));
+  for (const id of mapUnitIds) {
+    for (const pose of mapPoses) {
+      frame(`${id}-${pose}`, () => {
+        context.save();
+        context.translate(offset, 0);
+        drawMapUnit(context, id, pose);
+        context.restore();
+      });
+    }
+    scene.anims.create({
+      key: `${id}-walk`,
+      frames: ['step-a', 'ready', 'step-b', 'ready'].map(pose => ({ key: 'battle-art', frame: `${id}-${pose}` })),
+      frameRate: 14,
+      repeat: -1,
+    });
   }
   texture.refresh();
 }

@@ -480,3 +480,51 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
   .forecast-portraits > div { grid-template-columns: 32px minmax(0, 1fr); }
   .forecast-portraits canvas { width: 32px; height: 32px; }
 }
+
+/* Each weapon follows its own path while its sprite changes pose on the same beat. */
+.combat-stage.blade.windup.left #stage-left,
+.combat-stage.blade.windup.right #stage-right { animation-duration: var(--anticipation); }
+.combat-stage[data-motion="axe"].windup.left #stage-left,
+.combat-stage[data-motion="axe"].windup.right #stage-right { animation-name: axe-leap; }
+.combat-stage.spell.windup.left #stage-left canvas,
+.combat-stage.spell.windup.right #stage-right canvas { animation-duration: var(--anticipation); }
+.combat-stage.spell.windup.left::after,
+.combat-stage.spell.windup.right::after {
+  animation-duration: var(--anticipation);
+  background: #eee0ff;
+  filter: drop-shadow(0 0 6px #c190fa);
+}
+.combat-stage[data-caster="red-2"].spell.windup::after { background: #ffb98e; filter: drop-shadow(0 0 6px #f4985d); }
+.combat-stage[data-motion="axe"].impact::after {
+  width: 72px;
+  height: 76px;
+  background: linear-gradient(#fff5d3, #efb060);
+  clip-path: polygon(8% 0, 58% 7%, 89% 32%, 98% 61%, 70% 100%, 79% 61%, 67% 44%, 46% 27%, 0 15%);
+  animation: axe-sweep .27s ease-out both;
+}
+.combat-stage[data-motion="sword"].impact::after {
+  width: 70px;
+  height: 48px;
+  clip-path: polygon(0 88%, 17% 62%, 100% 3%, 77% 47%, 32% 83%);
+  background: linear-gradient(20deg, #c7e9ee, #fff8dc);
+}
+.combat-stage.impact .duel-actor[data-pose="hit"] canvas { animation: struck .26s steps(4, end) both; }
+.combat-stage .duel-actor.fallen { animation: defeated .16s steps(4, end) forwards; }
+@keyframes axe-leap {
+  0%, 30% { transform: translate(0, 0); }
+  63% { transform: translate(calc(var(--direction) * 24cqw), -24px); }
+  90% { transform: translate(calc(var(--direction) * 39cqw), -13px); }
+  100% { transform: translate(calc(var(--direction) * 40cqw), -4px); }
+}
+@keyframes axe-sweep { from { transform: translateY(-16px) rotate(-17deg); } to { transform: translateY(11px) rotate(12deg); opacity: 0; } }
+@keyframes defeated { to { opacity: 0; transform: translateY(6px) rotate(calc(var(--direction) * -13deg)); } }
+@keyframes bolt-right { 0%, 65% { left: 28%; opacity: 0; } 68% { opacity: 1; } to { left: 72%; opacity: 1; } }
+@keyframes bolt-left { 0%, 65% { left: 71%; opacity: 0; } 68% { opacity: 1; } to { left: 22%; opacity: 1; } }
+@media (max-width: 480px) {
+  .combat-stage[data-motion="axe"].impact::after { width: 42px; height: 48px; }
+  .combat-stage[data-motion="sword"].impact::after { width: 48px; height: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combat-stage .duel-actor[data-pose] canvas, .combat-stage .duel-actor.fallen { animation: none !important; }
+  .combat-stage .duel-actor.fallen { opacity: 0; }
+}

@@ -1,7 +1,7 @@
 import { pixelPainter } from './pixelPainter';
 
 export const COMBAT_SIZE = 44;
-export type Pose = 'ready' | 'windup' | 'strike' | 'hit';
+export type Pose = 'ready' | 'windup' | 'advance' | 'release' | 'strike' | 'recover' | 'hit' | 'guard';
 type Costume = 'knight' | 'raider' | 'mage' | 'hexer' | 'escort';
 type Colors = { costume: Costume; dark: string; mid: string; light: string; trim: string; hair: string };
 
@@ -32,12 +32,15 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = COMBAT_SIZE;
   const context = canvas.getContext('2d')!;
-  const dx = pose === 'strike' ? 3 : pose === 'hit' ? -2 : 0;
-  context.translate(dx, pose === 'windup' ? 1 : 0);
+  const dx = pose === 'strike' || pose === 'release' ? 2 : pose === 'hit' ? -2 : 0;
+  const dy = pose === 'windup' || pose === 'guard' ? 1 : pose === 'advance' ? -1 : 0;
+  context.translate(dx, dy);
   const { pixel: p, shape: s } = pixelPainter(context);
   const robed = c.costume === 'mage' || c.costume === 'hexer' || c.costume === 'escort';
-  const swinging = pose === 'strike';
-  const preparing = pose === 'windup';
+  const swinging = pose === 'strike' || pose === 'release';
+  const preparing = pose === 'windup' || pose === 'advance';
+  const advancing = pose === 'advance' && !robed;
+  const braced = pose === 'guard' || pose === 'hit';
 
   if (robed) {
     s(ink, [14, 23], [27, 23], [29, 32], [33, 38], [29, 41], [10, 41], [6, 38], [10, 34]);
@@ -51,11 +54,19 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
     s(ink, [12, 22], [17, 25], [15, 31], [8, 35], [2, 34], [5, 29], [8, 23]);
     s(c.dark, [13, 24], [16, 25], [14, 30], [7, 33], [4, 33], [7, 28]);
     s(c.mid, [13, 24], [15, 25], [12, 30], [6, 32], [8, 27]);
-    s(ink, [12, 27], [24, 25], [25, 31], [23, 36], [25, 40], [28, 41], [28, 43], [20, 43], [17, 39], [18, 33], [13, 36], [11, 39], [12, 42], [10, 43], [3, 43], [4, 39], [7, 37], [9, 32]);
-    s(c.mid, [13, 28], [23, 27], [24, 31], [20, 35], [20, 38], [25, 42], [21, 42],
-      [18, 38], [20, 31], [15, 34], [10, 38], [9, 42], [5, 42], [5, 40], [9, 36]);
-    s(c.light, [10, 36], [13, 34], [11, 38], [7, 41], [6, 40]);
-    p(19, 35, 2, 3, c.light); p(22, 40, 3, 1, c.light);
+    if (advancing) {
+      s(ink, [12, 27], [24, 25], [28, 31], [24, 34], [24, 39], [29, 40], [29, 42],
+        [20, 42], [18, 37], [19, 32], [14, 34], [9, 36], [6, 41], [2, 41], [2, 39], [7, 34]);
+      s(c.mid, [13, 28], [24, 27], [26, 31], [22, 34], [22, 39], [26, 41], [21, 41],
+        [19, 37], [21, 31], [13, 33], [8, 36], [5, 40], [3, 40], [8, 35]);
+      p(22, 32, 3, 2, c.light); p(10, 34, 3, 1, c.light);
+    } else {
+      s(ink, [12, 27], [24, 25], [25, 31], [23, 36], [25, 40], [28, 41], [28, 43], [20, 43], [17, 39], [18, 33], [13, 36], [11, 39], [12, 42], [10, 43], [3, 43], [4, 39], [7, 37], [9, 32]);
+      s(c.mid, [13, 28], [23, 27], [24, 31], [20, 35], [20, 38], [25, 42], [21, 42],
+        [18, 38], [20, 31], [15, 34], [10, 38], [9, 42], [5, 42], [5, 40], [9, 36]);
+      s(c.light, [10, 36], [13, 34], [11, 38], [7, 41], [6, 40]);
+      p(19, 35, 2, 3, c.light); p(22, 40, 3, 1, c.light);
+    }
   }
 
   s(ink, [8, 23], [10, 17], [14, 14], [23, 14], [28, 18], [27, 25], [23, 30], [14, 30], [12, 26]);
@@ -86,15 +97,15 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
   }
 
   if (!robed) {
-    const start = swinging ? 25 : 19;
-    const top = preparing ? 12 : 19;
+    const start = swinging ? 25 : pose === 'recover' || braced ? 17 : 19;
+    const top = advancing ? 10 : preparing ? 13 : pose === 'recover' || braced ? 23 : 19;
     s(ink, [18, 18], [22, 17], [start + 5, top], [start + 6, top + 4], [start + 3, top + 6], [19, 25], [16, 22]);
     s(c.light, [18, 19], [22, 18], [start + 4, top + 1], [start + 4, top + 4], [20, 23]);
     p(start + 3, top + 1, 3, 3, skin);
     const hilt = start + 6;
     if (c.costume === 'raider') {
-      const headX = swinging ? 38 : preparing ? 18 : 32;
-      const headY = swinging ? 16 : 6;
+      const headX = swinging ? 37 : advancing ? 21 : preparing ? 18 : 31;
+      const headY = pose === 'release' ? 9 : swinging ? 18 : advancing ? 6 : pose === 'recover' ? 21 : 6;
       s(ink, [hilt - 1, top + 3], [headX, headY], [headX + 2, headY + 2], [hilt + 2, top + 5]);
       s('#b78357', [hilt, top + 3], [headX, headY + 1], [headX + 1, headY + 2], [hilt + 1, top + 4]);
       s(ink, [headX - 3, headY - 2], [headX + 3, headY - 5], [headX + 5, headY - 2],
@@ -102,13 +113,17 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
       s(steel, [headX - 2, headY - 1], [headX + 3, headY - 4], [headX + 4, headY - 2],
         [headX + 4, headY + 2], [headX + 2, headY + 5], [headX, headY + 2]);
       p(headX + 3, headY - 2, 1, 4, gleam);
+    } else if (pose === 'release') {
+      s(ink, [hilt - 2, 23], [37, 8], [40, 8], [40, 11], [hilt + 2, 24]);
+      s(steel, [hilt, 23], [38, 9], [39, 10], [hilt + 2, 23]);
+      p(hilt - 2, 21, 5, 2, c.trim);
     } else if (swinging) {
       p(hilt - 1, 17, 2, 7, c.trim);
       s(ink, [hilt + 1, 18], [40, 15], [41, 17], [39, 21], [hilt + 1, 22]);
       s(steel, [hilt + 1, 19], [40, 16], [39, 20], [hilt + 1, 21]);
       p(hilt + 2, 19, 4, 1, gleam);
     } else {
-      const tip = preparing ? hilt - 8 : hilt + 9;
+      const tip = pose === 'recover' ? hilt + 12 : preparing ? hilt - 8 : hilt + 9;
       s(ink, [hilt - 1, top + 2], [tip, 1], [tip + 2, 1], [tip + 3, 5], [hilt + 3, top + 3]);
       s(steel, [hilt, top + 1], [tip + 1, 2], [tip + 2, 3], [hilt + 2, top + 2]);
       p(hilt - 1, top, 5, 2, c.trim);
@@ -119,7 +134,9 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
       s(c.light, [7, 20], [13, 19], [14, 21], [8, 22], [7, 25], [6, 24]); p(9, 24, 4, 2, c.trim); p(10, 23, 2, 4, c.trim);
     }
   } else {
-    const staff = swinging ? 35 : preparing ? 30 : 31;
+    const staff = pose === 'release' ? 36 : swinging ? 33 : pose === 'advance' ? 28 : preparing ? 30 : 31;
+    const lift = pose === 'advance' ? -3 : swinging ? 1 : 0;
+    if (lift) context.translate(0, lift);
     p(staff, 9, 3, 32, ink); p(staff + 1, 10, 1, 28, c.trim);
     s(ink, [staff - 3, 9], [staff + 1, 4], [staff + 5, 7], [staff + 4, 12], [staff, 14]);
     s(c.trim, [staff - 2, 9], [staff + 1, 5], [staff + 4, 7], [staff + 3, 11], [staff, 13]);
@@ -127,6 +144,10 @@ function paintCombatant(c: Colors, pose: Pose): HTMLCanvasElement {
     s(ink, [19, 17], [24, 17], [27, 20], [staff + 3, 19], [staff + 4, 22], [29, 25], [21, 25], [17, 22]);
     s(c.light, [19, 18], [23, 18], [26, 21], [29, 21], [29, 23], [21, 24], [18, 22]);
     p(staff - 1, 20, 4, 3, skin);
+    if (lift) context.translate(0, -lift);
+    if (pose === 'advance') {
+      p(staff + 2, 3, 1, 1, gleam); p(staff - 4, 9, 2, 1, c.light); p(staff + 6, 11, 1, 2, c.trim);
+    }
   }
   return canvas;
 }

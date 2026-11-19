@@ -3,7 +3,14 @@ import type { Strike, Unit } from '../game/rules';
 import { unitProfile } from '../game/units';
 import { drawPortrait } from './portraits';
 
-export const duelTiming = { enter: 120, blade: 260, spell: 345, impact: 410, exit: 125 };
+export const duelTiming = { enter: 120, impact: 410, exit: 125 };
+type Motion = 'sword' | 'axe' | 'spell';
+const anticipation: Record<Motion, readonly number[]> = {
+  sword: [70, 122, 48],
+  axe: [112, 140, 56],
+  spell: [112, 137, 86],
+};
+const poses = ['windup', 'advance', 'release'] as const;
 export const duelGroundLabels = { road: '古道', wood: '川辺の橋', meadow: '草地' } as const;
 
 type Fighter = { unit: Unit; actor: HTMLElement; card: HTMLElement };
@@ -13,6 +20,8 @@ export class CombatStage {
   private readonly label = document.querySelector<HTMLElement>('#stage-label')!;
   private readonly backgrounds = new Map<ArenaGround, string>();
   private fighters: Fighter[] = [];
+
+  constructor(private readonly pause: (ms: number) => Promise<void>) {}
 
   open(first: Unit, second: Unit, ground: ArenaGround, gear: (unit: Unit) => string): void {
     const landscape = this.backgrounds.get(ground) ?? combatBackdrop(ground);
@@ -42,17 +51,26 @@ export class CombatStage {
     });
   }
 
-  windup(strike: Strike, counter: boolean): void {
+  async windup(strike: Strike, counter: boolean): Promise<void> {
     const attacker = this.find(strike.attackerId);
+    const style = unitProfile(strike.attackerId).style;
+    const motion = style === 'spell' ? 'spell' : strike.attackerId === 'red-1' ? 'axe' : 'sword';
     for (const fighter of this.fighters) {
       fighter.actor.querySelector('.duel-damage')!.textContent = '';
-      this.drawPose(fighter, fighter === attacker ? 'windup' : 'ready');
+      this.drawPose(fighter, fighter === attacker ? 'windup' : 'guard');
     }
     const side = this.fighters[0] === attacker ? 'left' : 'right';
     this.stage.className = 'combat-stage';
+    this.stage.dataset.motion = motion;
+    this.stage.dataset.caster = strike.attackerId;
+    this.stage.style.setProperty('--anticipation', `${anticipation[motion].reduce((sum, ms) => sum + ms, 0)}ms`);
     void this.stage.offsetWidth;
-    this.stage.classList.add(side, unitProfile(strike.attackerId).style, 'windup');
+    this.stage.classList.add(side, style, 'windup');
     this.label.textContent = counter ? '反撃' : '先制攻撃';
+    for (const [index, pose] of poses.entries()) {
+      this.drawPose(attacker, pose);
+      await this.pause(anticipation[motion][index]);
+    }
   }
 
   impact(strike: Strike): void {
@@ -66,6 +84,16 @@ export class CombatStage {
     this.updateHp(target, strike.remainingHp);
   }
 
+  async recover(strike: Strike): Promise<void> {
+    await this.pause(151);
+    this.drawPose(this.find(strike.attackerId), 'recover');
+    if (strike.remainingHp > 0) this.drawPose(this.find(strike.defenderId), 'guard');
+    await this.pause(duelTiming.impact - 215);
+    this.drawPose(this.find(strike.attackerId), 'ready');
+    if (strike.remainingHp > 0) this.drawPose(this.find(strike.defenderId), 'ready');
+    await this.pause(64);
+  }
+
   fall(id: string): void { this.find(id).actor.classList.add('fallen'); }
 
   exit(): void { this.stage.classList.add('leaving'); }
@@ -75,6 +103,7 @@ export class CombatStage {
   private find(id: string): Fighter { return this.fighters.find(fighter => fighter.unit.id === id)!; }
 
   private drawPose(fighter: Fighter, pose: Pose): void {
+    fighter.actor.dataset.pose = pose;
     drawCombatant(fighter.actor.querySelector('canvas')!, fighter.unit.id, pose);
   }
 
