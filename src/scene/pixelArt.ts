@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { TILE } from './board';
-import { drawMapUnit, mapPoses, mapUnitIds } from './mapUnits';
+import { drawMapUnit, mapFacings, mapPoses, mapUnitIds } from './mapUnits';
 
 type Pixel = (x: number, y: number, w: number, h: number, color: string) => void;
 
@@ -12,7 +12,7 @@ const clayShade = '#9b805c';
 
 export function createPixelArt(scene: Phaser.Scene): void {
   if (scene.textures.exists('battle-art')) return;
-  const texture = scene.textures.createCanvas('battle-art', TILE * (13 + mapUnitIds.length * mapPoses.length), TILE)!;
+  const texture = scene.textures.createCanvas('battle-art', TILE * (15 + mapUnitIds.length * mapFacings.length * mapPoses.length), TILE)!;
   const context = texture.getContext();
   let offset = 0;
   const frame = (name: string, draw: (pixel: Pixel) => void): void => {
@@ -105,6 +105,18 @@ export function createPixelArt(scene: Phaser.Scene): void {
     p(1, 18, 4, 1, '#5a94a9'); p(13, 2, 3, 1, '#5a94a9');
   };
   frame('water', water);
+  for (const east of [false, true]) {
+    frame(east ? 'water-east' : 'water-west', p => {
+      water(p);
+      for (let y = 0; y < 20; y++) {
+        const curve = [3, 3, 3, 2, 2, 2, 1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 3, 3, 3, 3][y];
+        const x = (from: number, span: number): number => east ? 20 - from - span : from;
+        p(x(0, curve), y, curve, 1, grass);
+        p(x(curve, 1), y, 1, 1, y % 4 === 0 ? '#9c9b62' : '#988858');
+        p(x(curve + 1, 2), y, 2, 1, y % 3 === 0 ? '#87bac1' : '#6294a7');
+      }
+    });
+  }
   frame('bridge', p => {
     water(p);
     p(0, 4, 20, 12, '#5e4840'); p(0, 5, 20, 9, '#bd905b');
@@ -121,20 +133,22 @@ export function createPixelArt(scene: Phaser.Scene): void {
     p(9, 6, 2, 4, '#f9e696');
   });
   for (const id of mapUnitIds) {
-    for (const pose of mapPoses) {
-      frame(`${id}-${pose}`, () => {
-        context.save();
-        context.translate(offset, 0);
-        drawMapUnit(context, id, pose);
-        context.restore();
+    for (const facing of mapFacings) {
+      for (const pose of mapPoses) {
+        frame(`${id}-${facing}-${pose}`, () => {
+          context.save();
+          context.translate(offset, 0);
+          drawMapUnit(context, id, facing, pose);
+          context.restore();
+        });
+      }
+      scene.anims.create({
+        key: `${id}-${facing}-walk`,
+        frames: ['step-a', 'ready', 'step-b', 'ready'].map(pose => ({ key: 'battle-art', frame: `${id}-${facing}-${pose}` })),
+        frameRate: 14,
+        repeat: -1,
       });
     }
-    scene.anims.create({
-      key: `${id}-walk`,
-      frames: ['step-a', 'ready', 'step-b', 'ready'].map(pose => ({ key: 'battle-art', frame: `${id}-${pose}` })),
-      frameRate: 14,
-      repeat: -1,
-    });
   }
   texture.refresh();
 }

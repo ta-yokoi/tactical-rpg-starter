@@ -8,6 +8,7 @@ import { attackRange, battleProfile, combatForecast, handleTile, initialState, m
 import { unitProfile } from '../game/units';
 import { center, MARGIN, TILE } from './board';
 import { createPixelArt } from './pixelArt';
+import type { MapFacing } from './mapUnits';
 import { CombatStage, duelTiming } from './CombatStage';
 import type { ArenaGround } from './combatArt';
 import { FormationDialog } from './FormationDialog';
@@ -22,6 +23,7 @@ type UnitView = {
   body: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Sprite;
   health: Phaser.GameObjects.Graphics;
+  facing: MapFacing;
 };
 
 export class BattleScene extends Phaser.Scene {
@@ -118,7 +120,11 @@ export class BattleScene extends Phaser.Scene {
         const point = { x, y };
         const variant = (x * 3 + y * 5) % 4;
         const terrain = terrainAt(this.state, point);
-        const frame = terrain.frame === 'grass' ? `grass-${variant}` : terrain.frame;
+        let frame: string = terrain.frame === 'grass' ? `grass-${variant}` : terrain.frame;
+        if (terrain.frame === 'water') {
+          if (terrainAt(this.state, { x: x - 1, y }).frame !== 'water') frame = 'water-west';
+          else if (terrainAt(this.state, { x: x + 1, y }).frame !== 'water') frame = 'water-east';
+        }
         const left = MARGIN + x * TILE;
         const top = MARGIN + y * TILE;
         this.battlefield.add(this.add.image(left, top, 'battle-art', frame).setOrigin(0));
@@ -429,13 +435,19 @@ export class BattleScene extends Phaser.Scene {
     this.state = next;
     this.drawUi();
     if (source && moved) {
-      const { body, sprite } = this.views.get(source.id)!;
+      const view = this.views.get(source.id)!;
+      const { body, sprite } = view;
       this.soundKit.play('move');
-      if (!this.reduceMotion.matches) sprite.play(`${source.id}-walk`);
       for (const point of movementPath(previous, source.id, moved)) {
         const position = center(point);
-        if (position.x !== body.x) sprite.setFlipX(position.x < body.x);
-        await this.tween(body, { ...center(point), duration: 116, ease: 'Sine.easeInOut' });
+        const horizontal = position.x !== body.x;
+        const facing: MapFacing = horizontal ? 'side' : position.y < body.y ? 'north' : 'south';
+        const walk = `${source.id}-${facing}-walk`;
+        view.facing = facing;
+        sprite.setFlipX(horizontal && position.x < body.x);
+        if (this.reduceMotion.matches) sprite.setFrame(`${source.id}-${facing}-idle`);
+        else sprite.play(walk, true);
+        await this.tween(body, { ...position, duration: 116, ease: 'Sine.easeInOut' });
       }
       sprite.stop();
     } else if (!hit) {
@@ -479,10 +491,10 @@ export class BattleScene extends Phaser.Scene {
     for (const unit of this.state.units) {
       const { x, y } = center(unit);
       const shadow = this.add.ellipse(0, 5, 13, 4, 0x233641, .7);
-      const sprite = this.add.sprite(0, -2, 'battle-art', `${unit.id}-idle`).setFlipX(unit.team === 'red');
+      const sprite = this.add.sprite(0, -2, 'battle-art', `${unit.id}-south-idle`);
       const health = this.add.graphics();
       const body = this.add.container(x, y, [shadow, sprite, health]).setDepth(2);
-      const view = { body, sprite, health };
+      const view: UnitView = { body, sprite, health, facing: 'south' };
       this.views.set(unit.id, view);
       this.updateHealth(view, unit);
     }
@@ -495,7 +507,7 @@ export class BattleScene extends Phaser.Scene {
     bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-9, 4, 2, 2);
     if (!view.sprite.anims.isPlaying) {
       const poised = unit.id === this.state.selectedId && !unit.attacked;
-      view.sprite.setFrame(`${unit.id}-${poised ? 'ready' : 'idle'}`);
+      view.sprite.setFrame(`${unit.id}-${view.facing}-${poised ? 'ready' : 'idle'}`);
     }
     view.sprite.setAlpha(unit.attacked ? .74 : 1);
   }
