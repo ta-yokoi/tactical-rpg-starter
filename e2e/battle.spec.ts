@@ -23,6 +23,14 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
   const ready = async (): Promise<void> => {
     await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
   };
+  const waitForAttack = async (id: string): Promise<void> => {
+    // The dialog closes before its close event starts the attack.
+    await expect.poll(async () => {
+      const attacker = (await state()).units.find(unit => unit.id === id);
+      return !attacker || attacker.attacked;
+    }).toBe(true);
+    await ready();
+  };
   const tile = async (x: number, y: number): Promise<void> => {
     await page.mouse.click(...await tilePosition(page, x, y));
     await ready();
@@ -107,7 +115,7 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
           await page.screenshot({ path: testInfo.outputPath('battle-blade.png'), fullPage: true });
           capturedBlade = true;
         }
-        await ready();
+        await waitForAttack(active.id);
         await expect(page.locator('#game canvas')).toBeVisible();
         const resolved = await state();
         if (!resolved.winner) await expect(page.locator('#game')).toBeFocused();
@@ -198,7 +206,7 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
         await page.screenshot({ path: testInfo.outputPath('formation-combat.png'), fullPage: true });
       }
       await attackDialog.getByRole('button', { name: '攻撃する' }).click();
-      await ready();
+      await waitForAttack(id);
     };
     await order('blue-1', 2, 3);
     await order('blue-2', 4, 5);

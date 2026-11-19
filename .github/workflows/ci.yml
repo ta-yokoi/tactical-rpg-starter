@@ -14,6 +14,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      entry: ${{ steps.build.outputs.entry }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,9 +25,18 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test
-      - run: npm run build
+      - name: Build the Pages bundle
+        id: build
         env:
           GITHUB_PAGES: 'true'
+        run: |
+          npm run build
+          node --input-type=module <<'JS'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const entry = readFileSync('dist/index.html', 'utf8').match(/<script type="module"[^>]*src="([^"]+)"/)?.[1];
+          if (!entry) throw new Error('Built game entry point is missing');
+          appendFileSync(process.env.GITHUB_OUTPUT, `entry=${entry}\n`);
+          JS
       - run: npm run test:e2e
         env:
           GITHUB_PAGES: 'true'
@@ -39,15 +50,15 @@ jobs:
             test-results/
           if-no-files-found: ignore
       - name: Configure Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
     environment:
@@ -56,3 +67,32 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify the public Pages URL
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_ENTRY: ${{ needs.verify.outputs.entry }}
+        run: |
+          node --input-type=module <<'JS'
+          import { setTimeout } from 'node:timers/promises';
+          const url = process.env.PAGES_URL;
+          const entry = process.env.EXPECTED_ENTRY;
+          if (!url || !entry) throw new Error('Pages URL or game entry point is missing');
+          for (let attempt = 0; ; attempt++) {
+            try {
+              const options = { signal: AbortSignal.timeout(8_000) };
+              const page = await fetch(url, options);
+              if (!page.ok) throw new Error(`Game page returned HTTP ${page.status}`);
+              const html = await page.text();
+              if (!html.includes(`src="${entry}"`)) throw new Error('The expected build is not available yet');
+              const script = await fetch(new URL(entry, url), { signal: AbortSignal.timeout(8_000) });
+              if (!script.ok || !(script.headers.get('content-type') ?? '').includes('javascript')) {
+                throw new Error(`Game script returned HTTP ${script.status}`);
+              }
+              console.log(`Public game and its JavaScript are reachable at ${url}`);
+              break;
+            } catch (error) {
+              if (attempt === 7) throw error;
+              await setTimeout(5_000);
+            }
+          }
+          JS

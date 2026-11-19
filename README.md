@@ -27,7 +27,7 @@ npm run build
 
 ## 配信と容量
 
-`main` にpushするとGitHub ActionsがVitest、ビルド、Playwrightを実行してGitHub Pagesへデプロイします。Pull Requestでは検証のみ実行します。CIのPlaywrightはビルド済みファイルをPagesと同じサブパスで検証します。PagesのSourceは初回のみGitHub Actionsに設定します。`GITHUB_PAGES=true` でViteの `base` を `/<repository>/` に切り替えます。Cloudで同じ検証を実行する場合は次の通りです。
+`main` へのpush、またはActionsの `CI and Pages` を `main` で手動実行すると、Vitest、ビルド、PlaywrightのあとにGitHub Pagesへデプロイします。公開URLから今回のビルドのJavaScriptを取得できることも確認します。Pull Requestでは検証のみ実行します。CIのPlaywrightはビルド済みファイルをPagesと同じサブパスで検証します。PagesのSourceは初回のみGitHub Actionsに設定します。`GITHUB_PAGES=true` でViteの `base` を `/<repository>/` に切り替えます。Cloudで同じ検証を実行する場合は次の通りです。
 
 ```sh
 GITHUB_PAGES=true npm run build
