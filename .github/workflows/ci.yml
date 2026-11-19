@@ -27,6 +27,8 @@ jobs:
         env:
           GITHUB_PAGES: 'true'
       - run: npm run test:e2e
+        env:
+          GITHUB_PAGES: 'true'
       - name: Save browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4

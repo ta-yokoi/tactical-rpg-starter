@@ -10,38 +10,80 @@
   <body>
     <main>
       <header class="masthead">
-        <div class="brand-mark" aria-hidden="true">✦</div>
         <div class="brand-copy">
-          <div class="eyebrow">TACTICAL CHRONICLE <span>·</span> CHAPTER 01</div>
-          <h1>蒼の境界 <small>— あおのきょうかい —</small></h1>
-          <p>古い峠に迫る敵を退け、夜明けまで防衛線を守れ。</p>
+          <div class="eyebrow"><span id="chapter-label">第1章</span><span class="hero-divider"></span><span id="seal-title">古い峠の防衛線</span></div>
+          <h1>蒼の境界</h1>
+          <p id="briefing">古い峠に迫る敵を退け、防衛線を守れ。</p>
         </div>
-        <div class="chapter-seal" aria-hidden="true"><span>01</span><small>峠の防衛</small></div>
+        <div class="chapter-seal" aria-hidden="true"><span id="chapter-number">01</span></div>
       </header>
 
-      <div class="mission-strip"><span class="diamond">◆</span><strong>勝利条件</strong><span>敵部隊を全滅させる</span><span class="mission-note">2人の仲間を指揮して戦おう</span></div>
+      <div class="mission-strip"><span class="diamond" aria-hidden="true">◆</span><strong>勝利条件</strong><span id="mission-objective">敵部隊を全滅させる</span><span id="checkpoint-status" class="mission-note" role="status"></span></div>
       <section class="game-layout" aria-label="戦闘画面">
         <div class="battle-frame">
-          <div class="battle-topline"><span>古い峠 <small>／ LOWLAND PASS</small></span><span>MISSION 01</span></div>
-          <div id="game" aria-label="8列6行の戦場"></div>
-          <div id="phase-banner" class="phase-banner" aria-live="polite"></div>
-          <div id="outcome" class="outcome" hidden>
-            <div class="outcome-card"><span class="eyebrow">BATTLE RESULT</span><h2 id="outcome-heading"></h2><p id="outcome-copy"></p><button id="restart-outcome" type="button">もう一度戦う ↻</button></div>
+          <div class="battle-topline"><span id="district">古い峠</span><span id="turn-label">第1ターン ／ 味方フェイズ</span></div>
+          <div class="battle-window">
+          <div id="game" tabindex="0" aria-label="8列6行の戦場" aria-describedby="board-controls"></div>
+          <div id="phase-banner" class="phase-banner" aria-live="polite"><span></span><strong></strong></div>
+          <div id="combat-stage" class="combat-stage" hidden>
+            <div class="duel-head"><span id="duel-ground"></span><strong id="stage-label" aria-live="polite"></strong></div>
+            <div class="stage-line" aria-hidden="true">
+              <div class="duel-actor" id="stage-left"><canvas width="44" height="44"></canvas><span class="duel-damage"></span></div>
+              <div class="duel-actor" id="stage-right"><canvas width="44" height="44"></canvas><span class="duel-damage"></span></div>
+            </div>
+            <div class="duel-hud">
+              <div class="duel-card" id="hud-left"><canvas width="64" height="64" aria-hidden="true"></canvas><div class="duel-readout"><strong></strong><span class="duel-weapon"></span><div class="duel-hp" role="meter" aria-label="HP" aria-valuemin="0"><i></i></div><small></small></div></div>
+              <div class="duel-card" id="hud-right"><canvas width="64" height="64" aria-hidden="true"></canvas><div class="duel-readout"><strong></strong><span class="duel-weapon"></span><div class="duel-hp" role="meter" aria-label="HP" aria-valuemin="0"><i></i></div><small></small></div></div>
+            </div>
           </div>
-          <div class="battle-bottomline"><span>■ 移動</span><span>□ 攻撃</span><span>味方を選択して行動</span></div>
+          <div id="outcome" class="outcome" hidden>
+            <div class="outcome-card"><span id="outcome-mark" class="outcome-mark" aria-hidden="true">◆</span><h2 id="outcome-heading"></h2><p id="outcome-copy"></p><button id="next-chapter" type="button" hidden>編成へ進む →</button><button id="restart-outcome" type="button">もう一度戦う ↻</button><button id="replay-campaign" type="button" hidden>第1章から遊ぶ</button></div>
+          </div>
+          </div>
+          <div class="battle-bottomline"><output id="tile-detail" aria-live="polite">青の味方を選択</output><div id="terrain-chip" hidden><canvas width="20" height="20" aria-hidden="true"></canvas><span></span></div></div>
+          <button id="end-turn" class="primary-button" type="button">行動を終える <span>→</span></button>
         </div>
         <aside class="command-panel">
-          <div class="panel-label">COMMAND / 戦況</div>
-          <h2 id="turn-label">PLAYER PHASE · 1</h2>
-          <div class="status-box"><span class="status-icon">✦</span><p id="status" role="status">青のユニットを選択してください。</p></div>
-          <div class="selected-card"><span class="panel-label">選択中のユニット</span><strong id="selected-name">ユニットを選択</strong><p id="selected-detail">青のユニットをクリックして行動を決めます。</p></div>
+          <h2 class="panel-heading">戦況</h2>
+          <div class="status-box"><span class="status-icon" aria-hidden="true">✦</span><p id="status" role="status">青のユニットを選択してください。</p></div>
+          <div class="selected-card">
+            <div class="portrait-well"><canvas id="selected-portrait" width="64" height="64" hidden aria-hidden="true"></canvas><span aria-hidden="true">◇</span></div>
+            <div class="selected-copy"><span class="panel-label">選択中のユニット</span><strong id="selected-name">ユニットを選択</strong><p id="selected-detail">青のユニットをクリックして行動を決めます。</p><p id="selected-stats"></p><p id="selected-equipment"></p></div>
+          </div>
+          <div class="combat-log"><span class="panel-label">直近の交戦</span><p id="combat-log" aria-live="polite"></p></div>
           <div class="roster-section"><span class="panel-label">味方部隊</span><div id="roster"></div></div>
-          <button id="end-turn" class="primary-button" type="button">行動を終える <span>→</span></button>
-          <div class="toolbar"><button id="sound-toggle" type="button">♪ 音声 ON</button><button id="restart" type="button">↻ はじめから</button></div>
-          <div class="legend"><h3>あそびかた</h3><p><span class="swatch move"></span>緑のマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p>仲間を選択して行動します。敵はターン終了後に自動で動きます。</p></div>
+          <div class="toolbar"><button id="sound-toggle" type="button" aria-pressed="true">♪ 音声 ON</button><button id="restart" type="button">↻ この章をやり直す</button></div>
+          <details class="legend"><summary>操作と地形</summary><p><span class="swatch move"></span>青いマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p id="board-controls">クリック・タップでマスを選択。キーボードでは矢印で照準、Enterで決定。</p><p id="escort-help" hidden>ナギは毎ターン2マスまで移動でき、攻撃・反撃はできません。川は橋から渡ります。</p><p>低木では被ダメージが1減ります。石垣は通行と術を遮ります。敵はターン終了後に自動で動きます。</p></details>
         </aside>
       </section>
-      <footer>PIXEL BATTLE SYSTEM · ORIGINAL PROCEDURAL ART &amp; SYNTH SOUND</footer>
+      <dialog id="formation-dialog" class="attack-dialog formation-dialog" aria-labelledby="formation-heading">
+        <header><p class="eyebrow">第2章　渡し守の灯</p><h2 id="formation-heading">出撃前の編成</h2>
+          <p>装備と訓練を選び、ナギを護衛する準備を整えます。</p></header>
+        <form method="dialog">
+          <div class="formation-grid">
+            <fieldset><legend>アステルの装備</legend><canvas class="formation-portrait" data-portrait="blue-1" width="64" height="64" aria-hidden="true"></canvas><div id="astel-options"></div><p id="astel-preview" class="formation-preview"></p></fieldset>
+            <fieldset><legend>リナの装備</legend><canvas class="formation-portrait" data-portrait="blue-2" width="64" height="64" aria-hidden="true"></canvas><div id="lina-options"></div><p id="lina-preview" class="formation-preview"></p></fieldset>
+          </div>
+          <fieldset><legend>訓練（部隊で1つ）</legend><div id="training-options"></div></fieldset>
+          <div class="formation-actions">
+            <button value="cancel">戦果に戻る</button>
+            <button value="deploy" class="primary-button">第2章に出撃する →</button>
+          </div>
+        </form>
+      </dialog>
+      <dialog id="attack-dialog" aria-labelledby="attack-heading" class="attack-dialog">
+        <h2 id="attack-heading">戦闘予告</h2>
+        <div class="forecast-portraits">
+          <div><canvas id="forecast-source" width="64" height="64" aria-hidden="true"></canvas><strong id="forecast-source-name"></strong><small id="forecast-source-weapon"></small></div>
+          <span aria-hidden="true">◆</span>
+          <div><canvas id="forecast-target" width="64" height="64" aria-hidden="true"></canvas><strong id="forecast-target-name"></strong><small id="forecast-target-weapon"></small></div>
+        </div>
+        <div id="attack-summary" class="attack-summary"></div>
+        <form method="dialog">
+          <button value="cancel" autofocus>戻る</button>
+          <button value="attack" class="primary-button">攻撃する</button>
+        </form>
+      </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

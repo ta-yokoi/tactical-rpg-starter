@@ -1,11 +1,22 @@
-import { expect, test } from '@playwright/test';
-import { attackRange, movementRange, type GameState, type Unit } from '../src/game/rules';
+import { expect, test, type Page } from '@playwright/test';
+import { center, WIDTH, HEIGHT } from '../src/scene/board';
+import { combatForecast, type GameState } from '../src/game/rules';
 
-const distance = (a: Unit | { x: number; y: number }, b: Unit): number => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+async function tilePosition(page: Page, x: number, y: number): Promise<[number, number]> {
+  const bounds = await page.locator('#game canvas').boundingBox();
+  if (!bounds) throw new Error('Phaser canvas is missing');
+  const position = center({ x, y });
+  return [bounds.x + position.x * bounds.width / WIDTH, bounds.y + position.y * bounds.height / HEIGHT];
+}
 
-test('play an entire battle, inspect state, and restart', async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
+test('win chapter one, equip and train the party, and play both escort outcomes', async ({ page }, testInfo) => {
+  test.setTimeout(150_000);
   const errors: string[] = [];
+  const loadedArt = new Set<string>();
+  page.on('response', response => {
+    const url = new URL(response.url());
+    if (response.ok() && url.pathname.endsWith('.webp')) loadedArt.add(url.pathname);
+  });
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
   page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
   const state = async (): Promise<GameState> => page.evaluate(() => window.__GAME_TEST__!.getState());
@@ -13,41 +24,97 @@ test('play an entire battle, inspect state, and restart', async ({ page }, testI
     await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
   };
   const tile = async (x: number, y: number): Promise<void> => {
-    const bounds = await page.locator('#game canvas').boundingBox();
-    if (!bounds) throw new Error('Phaser canvas is missing');
-    await page.mouse.click(bounds.x + (20 + x * 72 + 36) * bounds.width / 616,
-      bounds.y + (20 + y * 72 + 36) * bounds.height / 472);
+    await page.mouse.click(...await tilePosition(page, x, y));
     await ready();
   };
   try {
-    await page.goto('/');
+    await page.goto('./');
     await expect.poll(async () => (await state()).turn).toBe('blue');
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+    await expect.poll(() => Array.from(loadedArt).some(path => /pass[^/]*\.webp$/.test(path))).toBe(true);
+    const endTurn = (await page.locator('#end-turn').boundingBox())!;
+    expect(endTurn.y + endTurn.height).toBeLessThanOrEqual(page.viewportSize()!.height);
     await page.screenshot({ path: testInfo.outputPath('battle-start.png'), fullPage: true });
-    for (let round = 0; round < 12; round++) {
-      let current = await state();
-      for (const hero of current.units.filter(unit => unit.team === 'blue')) {
-        current = await state();
-        const active = current.units.find(unit => unit.id === hero.id);
-        if (!active || active.attacked || current.winner) continue;
+    await tile(1, 4);
+    const portraitAsset = Array.from(loadedArt).find(path => /portraits[^/]*\.webp$/.test(path));
+    expect(portraitAsset).toBeDefined();
+    const portraitMatchesAtlas = await page.locator('#selected-portrait').evaluate(async (canvas, path) => {
+      const atlas = new Image();
+      atlas.src = path!;
+      await atlas.decode();
+      const expected = document.createElement('canvas');
+      expected.width = expected.height = 64;
+      expected.getContext('2d')!.drawImage(atlas, 64, 0, 64, 64, 0, 0, 64, 64);
+      return atlas.naturalWidth === 320 && atlas.naturalHeight === 64 &&
+        (canvas as HTMLCanvasElement).toDataURL() === expected.toDataURL();
+    }, portraitAsset);
+    expect(portraitMatchesAtlas).toBe(true);
+    await page.mouse.move(...await tilePosition(page, 4, 4));
+    await expect(page.locator('#tile-detail')).toContainText('移動 3マス');
+    await expect(page.locator('#terrain-chip')).toContainText('道');
+    await page.screenshot({ path: testInfo.outputPath('battle-route.png'), fullPage: true });
+    let capturedImpact = false;
+    let capturedBlade = false;
+    // Open with Lina’s spell, finish the mage with Astel, then attack the raider from cover.
+    const plan = [
+      [{ id: 'blue-1', x: 4, y: 1 }, { id: 'blue-2', x: 4, y: 4, targetId: 'red-2' }],
+      [{ id: 'blue-1', x: 5, y: 1, targetId: 'red-2' }, { id: 'blue-2', x: 4, y: 3 }],
+      [{ id: 'blue-1', x: 6, y: 0, targetId: 'red-1' }],
+    ];
+    for (const round of plan) {
+      for (const action of round) {
+        const active = (await state()).units.find(unit => unit.id === action.id)!;
         await tile(active.x, active.y);
-        current = await state();
-        let target = current.units.find(unit => unit.team === 'red' &&
-          attackRange(current, active.id).some(point => point.x === unit.x && point.y === unit.y));
-        if (!target) {
-          const enemies = current.units.filter(unit => unit.team === 'red');
-          const best = movementRange(current, active.id).sort((a, b) =>
-            Math.min(...enemies.map(enemy => distance(a, enemy))) -
-            Math.min(...enemies.map(enemy => distance(b, enemy))))[0];
-          if (best) await tile(best.x, best.y);
-          current = await state();
-          target = current.units.find(unit => unit.team === 'red' &&
-            attackRange(current, active.id).some(point => point.x === unit.x && point.y === unit.y));
+        await tile(action.x, action.y);
+        const current = await state();
+        expect(current.units.find(unit => unit.id === active.id)).toMatchObject({ x: action.x, y: action.y });
+        if (!action.targetId) continue;
+        const target = current.units.find(unit => unit.id === action.targetId)!;
+        const forecast = combatForecast(current, active.id, target.id)!;
+        const attackDialog = page.getByRole('dialog', { name: '戦闘予告' });
+        await page.mouse.move(...await tilePosition(page, target.x, target.y));
+        await expect(page.locator('#tile-detail')).toContainText(`与ダメージ ${forecast.opening.damage}`);
+        await tile(target.x, target.y);
+        await expect(attackDialog).toBeVisible();
+        if (!capturedImpact) {
+          await expect(attackDialog).toContainText(`敵HP ${target.hp} → ${forecast.opening.remainingHp}`);
+          await expect(attackDialog).toContainText(forecast.counter ? `反撃 ${forecast.counter.damage}ダメージ` : '反撃なし');
+          await page.screenshot({ path: testInfo.outputPath('battle-forecast.png'), fullPage: true });
+          await attackDialog.getByRole('button', { name: '戻る' }).click();
+          await expect(attackDialog).toBeHidden();
+          expect(await state()).toEqual(current);
+          await tile(target.x, target.y);
         }
-        if (target) await tile(target.x, target.y);
+        await attackDialog.getByRole('button', { name: '攻撃する' }).click();
+        if (!capturedImpact) {
+          await expect(page.locator('#stage-label')).toContainText(`−${forecast.opening.damage}`);
+          await expect(page.locator('#game canvas')).toBeHidden();
+          await expect(page.locator('#hud-right [role="meter"]')).toHaveAttribute('aria-valuenow', String(forecast.opening.remainingHp));
+          const painted = await page.locator('#stage-left canvas').evaluate((canvas: HTMLCanvasElement) => {
+            const rgba = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+            return {
+              width: canvas.width,
+              pixels: rgba.filter((value, index) => index % 4 === 3 && value > 0).length,
+            };
+          });
+          expect(painted.width).toBe(44);
+          expect(painted.pixels).toBeGreaterThan(300);
+          await page.screenshot({ path: testInfo.outputPath('battle-impact.png'), fullPage: true });
+          if (forecast.counter) await expect(page.locator('#stage-label')).toContainText(`反撃　−${forecast.counter.damage}`);
+          capturedImpact = true;
+        } else if (!capturedBlade && active.id === 'blue-1') {
+          await expect(page.locator('#combat-stage')).toHaveClass(/blade impact/);
+          await page.screenshot({ path: testInfo.outputPath('battle-blade.png'), fullPage: true });
+          capturedBlade = true;
+        }
+        await ready();
+        await expect(page.locator('#game canvas')).toBeVisible();
+        const resolved = await state();
+        if (!resolved.winner) await expect(page.locator('#game')).toBeFocused();
+        expect(resolved.units.find(unit => unit.id === target.id)?.hp ?? 0).toBe(forecast.opening.remainingHp);
+        if (forecast.counter) expect(resolved.units.find(unit => unit.id === active.id)?.hp ?? 0).toBe(forecast.counter.remainingHp);
       }
-      current = await state();
-      if (current.winner) break;
+      if ((await state()).winner) break;
       await page.getByRole('button', { name: /行動を終える/ }).click();
       await expect.poll(async () => { const result = await state(); return result.winner || (result.turn === 'blue' && !await page.evaluate(() => window.__GAME_TEST__!.isBusy())); }, { timeout: 15_000 }).toBeTruthy();
       if ((await state()).winner) break;
@@ -55,9 +122,110 @@ test('play an entire battle, inspect state, and restart', async ({ page }, testI
     expect((await state()).winner).toBe('blue');
     await expect(page.getByRole('heading', { name: '戦いに勝利！' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('battle-victory.png'), fullPage: true });
+    await page.reload();
+    const openFormation = page.getByRole('button', { name: /編成へ進む/ });
+    const formationDialog = page.getByRole('dialog', { name: '出撃前の編成' });
+    await expect(openFormation).toBeVisible();
+    expect((await state()).winner).toBe('blue');
+    await openFormation.click();
+    await expect.poll(() => Array.from(loadedArt).some(path => /river[^/]*\.webp$/.test(path))).toBe(true);
+    if (process.env.GITHUB_PAGES === 'true') {
+      const base = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'tactical-rpg-starter';
+      expect(Array.from(loadedArt).every(path => path.startsWith(`/${base}/assets/`))).toBe(true);
+    }
+    await formationDialog.getByRole('radio', { name: /灯守の盾/ }).check();
+    await formationDialog.getByRole('radio', { name: /彗星の杖/ }).check();
+    const vitality = formationDialog.getByRole('radio', { name: /アステルの体力訓練/ });
+    await vitality.check();
+    await expect(page.locator('#astel-preview')).toContainText('HP 11 → 13');
+    await expect(page.locator('#lina-preview')).toContainText('攻撃 5 → 7');
+    await page.screenshot({ path: testInfo.outputPath('formation.png'), fullPage: true });
+    await formationDialog.getByRole('button', { name: '戦果に戻る' }).click();
+    expect((await state()).chapterId).toBe(1);
+    await page.reload();
+    await openFormation.click();
+    await expect(vitality).toBeChecked();
+    await expect(formationDialog.getByRole('radio', { name: /灯守の盾/ })).toBeChecked();
+    await expect(formationDialog.getByRole('radio', { name: /彗星の杖/ })).toBeChecked();
+    const desktopSize = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileDialog = (await formationDialog.boundingBox())!;
+    expect(mobileDialog.x).toBeGreaterThanOrEqual(0);
+    expect(mobileDialog.x + mobileDialog.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: testInfo.outputPath('formation-mobile.png') });
+    await page.setViewportSize(desktopSize);
+    await formationDialog.getByRole('button', { name: /第2章に出撃する/ }).click();
+    await expect(page.locator('#mission-objective')).toContainText('護衛');
+    await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+    expect((await state())).toMatchObject({ chapterId: 2, formation: { astel: 'shield', lina: 'comet', training: 'vitality' } });
+    expect((await state()).units.find(unit => unit.id === 'blue-1')?.hp).toBe(13);
+    await tile(1, 3);
+    await expect(page.locator('#selected-equipment')).toContainText('灯守の盾');
+    await expect(page.locator('#selected-stats')).toContainText('守備 4');
+    await page.screenshot({ path: testInfo.outputPath('escort-start.png'), fullPage: true });
+
+    const enemyPhase = async (): Promise<void> => {
+      const previousTurn = (await state()).turnNumber;
+      await page.locator('#end-turn').click();
+      await expect.poll(async () => {
+        const current = await state();
+        return !await page.evaluate(() => window.__GAME_TEST__!.isBusy()) &&
+          (current.winner !== null || current.turnNumber === previousTurn + 2);
+      }, { timeout: 12_000 }).toBe(true);
+    };
+
+    for (let round = 0; round < 6 && !(await state()).winner; round++) await enemyPhase();
+    await expect(page.getByRole('heading', { name: '護衛失敗' })).toBeVisible();
+    const lost = await state();
+    expect(lost.units.some(unit => unit.id === 'blue-escort')).toBe(false);
+    expect(lost.units.some(unit => unit.team === 'blue')).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('escort-defeat.png'), fullPage: true });
     await page.getByRole('button', { name: /もう一度戦う/ }).click();
+    expect(await state()).toMatchObject({ chapterId: 2, turnNumber: 1, winner: null });
+
+    const order = async (id: string, x: number, y: number, targetId?: string): Promise<void> => {
+      const unit = (await state()).units.find(item => item.id === id)!;
+      await tile(unit.x, unit.y);
+      if (unit.x !== x || unit.y !== y) await tile(x, y);
+      expect((await state()).units.find(item => item.id === id)).toMatchObject({ x, y });
+      if (!targetId) return;
+      const target = (await state()).units.find(item => item.id === targetId)!;
+      await tile(target.x, target.y);
+      const attackDialog = page.getByRole('dialog', { name: '戦闘予告' });
+      if (id === 'blue-2' && targetId === 'red-2') {
+        await expect(attackDialog).toContainText('攻撃 4ダメージ');
+        await expect(attackDialog).toContainText('低木 −1');
+        await page.screenshot({ path: testInfo.outputPath('formation-combat.png'), fullPage: true });
+      }
+      await attackDialog.getByRole('button', { name: '攻撃する' }).click();
+      await ready();
+    };
+    await order('blue-1', 2, 3);
+    await order('blue-2', 4, 5);
+    await order('blue-escort', 1, 3);
+    const beforeReload = await state();
+    await page.reload();
+    await expect(page.locator('#checkpoint-status')).toContainText('前回の続き');
+    expect(await state()).toEqual(beforeReload);
+    await expect(page.locator('#selected-stats')).toContainText('攻撃不可');
+    await enemyPhase();
+
+    await order('blue-1', 2, 4);
+    await order('blue-2', 4, 5, 'red-2');
+    await order('blue-escort', 3, 3);
     expect((await state()).winner).toBeNull();
-    expect((await state()).turnNumber).toBe(1);
+    await enemyPhase();
+    await order('blue-1', 4, 5, 'red-1');
+    await order('blue-escort', 5, 3);
+    await enemyPhase();
+    await order('blue-escort', 7, 3);
+    await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
+    expect((await state()).winner).toBe('blue');
+    await page.screenshot({ path: testInfo.outputPath('escort-victory.png'), fullPage: true });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
+    await page.getByRole('button', { name: '第1章から遊ぶ' }).click();
+    expect(await state()).toMatchObject({ chapterId: 1, turnNumber: 1, winner: null });
     expect(errors, errors.join('\n')).toEqual([]);
   } finally {
     await testInfo.attach('browser-errors', { body: errors.join('\n') || '(none)', contentType: 'text/plain' });
@@ -65,14 +233,108 @@ test('play an entire battle, inspect state, and restart', async ({ page }, testI
   }
 });
 
-test('mobile layout and sound control remain usable', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await expect.poll(() => page.evaluate(() => Boolean(window.__GAME_TEST__))).toBe(true);
-  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
-  await expect(page.getByRole('button', { name: '♪ 音声 ON' })).toBeVisible();
-  await page.getByRole('button', { name: '♪ 音声 ON' }).click();
-  await expect(page.getByRole('button', { name: '♪ 音声 OFF' })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('battle-mobile.png'), fullPage: true });
+test.describe('touch screen', () => {
+  test.use({ hasTouch: true });
+
+  test('mobile layout and sound control remain usable', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      const start = OscillatorNode.prototype.start;
+      document.documentElement?.setAttribute('data-synth-starts', '0');
+      OscillatorNode.prototype.start = function (when?: number) {
+        const root = document.documentElement;
+        root.dataset.synthStarts = String(Number(root.dataset.synthStarts ?? 0) + 1);
+        start.call(this, when);
+      };
+    });
+    const assetPaths: string[] = [];
+    page.on('response', response => {
+      if (['script', 'stylesheet'].includes(response.request().resourceType()) && response.ok()) {
+        assetPaths.push(new URL(response.url()).pathname);
+      }
+    });
+    const response = await page.goto('./');
+    expect(response?.ok()).toBe(true);
+    if (process.env.GITHUB_PAGES === 'true') {
+      const base = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'tactical-rpg-starter';
+      expect(new URL(page.url()).pathname).toBe(`/${base}/`);
+      expect(assetPaths).toHaveLength(2);
+      expect(assetPaths.every(path => path.startsWith(`/${base}/assets/`))).toBe(true);
+    }
+    await expect.poll(() => page.evaluate(() => Boolean(window.__GAME_TEST__))).toBe(true);
+    await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+    const scale = () => page.locator('#game canvas').evaluate((canvas: HTMLCanvasElement) => {
+      const bounds = canvas.getBoundingClientRect();
+      return { x: bounds.width / canvas.width, y: bounds.height / canvas.height };
+    });
+    await expect.poll(scale).toEqual({ x: 2, y: 2 });
+    await page.touchscreen.tap(...await tilePosition(page, 1, 4));
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.getState().selectedId)).toBe('blue-2');
+    const audioStarts = () => page.locator('html').getAttribute('data-synth-starts').then(Number);
+    await expect.poll(audioStarts).toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: '♪ 音声 ON' })).toBeVisible();
+    await page.getByRole('button', { name: '♪ 音声 ON' }).click();
+    await expect(page.getByRole('button', { name: '♪ 音声 OFF' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const muted = await audioStarts();
+    await page.touchscreen.tap(...await tilePosition(page, 2, 4));
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.getState().units[1].x)).toBe(2);
+    await expect(page.locator('#end-turn')).toBeEnabled();
+    expect(await audioStarts()).toBe(muted);
+    await page.screenshot({ path: testInfo.outputPath('battle-mobile.png'), fullPage: true });
+    await page.locator('#restart').tap();
+    await page.locator('#game').scrollIntoViewIfNeeded();
+    await page.touchscreen.tap(...await tilePosition(page, 1, 4));
+    await page.touchscreen.tap(...await tilePosition(page, 4, 4));
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
+    await page.touchscreen.tap(...await tilePosition(page, 6, 4));
+    const forecast = page.getByRole('dialog', { name: '戦闘予告' });
+    await expect(forecast).toContainText('反撃');
+    await forecast.getByRole('button', { name: '戻る' }).tap();
+    await expect(forecast).toBeHidden();
+    expect(await page.evaluate(() => window.__GAME_TEST__!.getState().units[3].hp)).toBe(7);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect.poll(scale).toEqual({ x: 2, y: 2 });
+    await page.setViewportSize({ width: 320, height: 720 });
+    await expect.poll(scale).toEqual({ x: 1, y: 1 });
+  });
+});
+
+test('keyboard commands work and waiting through enemy turns leads to defeat', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
+  await page.goto('./');
+  const board = page.locator('#game');
+  await expect(board.locator('canvas')).toBeVisible();
+  await board.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await getState()).selectedId).toBe('blue-1');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#tile-detail')).toContainText('移動 1マス');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await getState()).units[0].x).toBe(2);
+  await expect(page.locator('#end-turn')).toBeEnabled();
+  for (let round = 1; round <= 9; round++) {
+    await page.locator('#end-turn').click();
+    if (round === 1) await expect(page.locator('#phase-banner')).toContainText('敵フェイズ');
+    await expect.poll(async () => {
+      const state = await getState();
+      const busy = await page.evaluate(() => window.__GAME_TEST__!.isBusy());
+      return !busy && (state.winner !== null || (state.turn === 'blue' && state.turnNumber > round * 2));
+    }, { timeout: 10_000 }).toBe(true);
+    if ((await getState()).winner) break;
+  }
+  const final = await getState();
+  expect(final.winner).toBe('red');
+  expect(final.units.every(unit => unit.team === 'red')).toBe(true);
+  await expect(page.getByRole('heading', { name: '部隊は敗走した' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('battle-defeat.png'), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 720 });
+  const frame = await page.locator('.battle-frame').boundingBox();
+  const card = await page.locator('.outcome-card').boundingBox();
+  expect(frame && card && card.y >= frame.y && card.y + card.height <= frame.y + frame.height).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await getState()).turnNumber).toBe(1);
+  expect((await getState()).units).toHaveLength(4);
+  await expect(board).toBeFocused();
 });

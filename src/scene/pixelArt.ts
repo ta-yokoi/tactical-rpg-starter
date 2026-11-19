@@ -1,83 +1,167 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
+import { TILE } from './board';
 
 type Pixel = (x: number, y: number, w: number, h: number, color: string) => void;
 
-const palette = {
-  grass: '#638c65', grassLight: '#83a977', grassDark: '#436e5b',
-  soil: '#b99b65', soilDark: '#896e55', stone: '#73817b', stoneDark: '#4f6465',
-  blue: '#397cbd', blueLight: '#8ac5da', red: '#ad4b50', redLight: '#ea946a',
-  gold: '#edca78', ink: '#283c48', skin: '#e6b58d', white: '#f2ead7',
+const grass = '#66874b';
+const grassShade = '#506c3d';
+const grassLight = '#85a459';
+const clay = '#bfa273';
+const clayShade = '#9b805c';
+
+// Each character uses the same outline, skin and brass colors, with team accent ramps.
+const shared = { k: '#202b37', s: '#e9b386', h: '#a26b63', g: '#efd38b', w: '#f2eed1' };
+const portraits = {
+  'blue-1': [
+    '......ggk.......', '.....kgabk......', '....kbaabbk...wk', '....kabsssk..wwk',
+    '....kbshsk..wwk.', '.....ksskk.wwk..', '...kkbwwbaakw...', '..kaabgbbkak....',
+    '.kabbbbaakak....', '.kabbwbbaakk....', '.kaabgbbbk......', '..kaabakbk......',
+    '...kkabkak......', '....kakkkbk.....', '...kbbk.kbbk....', '...kkk..kkk.....',
+  ],
+  'blue-2': [
+    '......kwk.......', '.....kagbk...g..', '....kaaabbk.gwg.', '...kababbbbk.g..',
+    '..kkkkkkkkkk.k..', '....kshssk...k..', '.....ksskk...k..', '....kbaagkk.kg..',
+    '...kabababskkg..', '..kabaababkk.k..', '..kbabgabk...k..', '..kabababk...k..',
+    '.kaabababbk..k..', '.kabbbbaabk..k..', '...kkwkwkk......', '....kk.kk.......',
+  ],
+  'blue-escort': [
+    '......ggg.......', '.....kgagk......', '...kkagaggkk....', '..kgggggggggk...',
+    '...kkkkkkkkk....', '.....kshsk......', '.....ksskk...k..', '....kabagk..kwk.',
+    '...kaagabbk.kgk.', '...kbabagsskkgk.', '...kbaabbkk..k..', '..kabaabak...k..',
+    '..kbabbaak...k..', '...kbbabkk...k..', '...kkk.kk.......', '................',
+  ],
+  'red-1': [
+    '...gk......kg...', '...kgk.kk.kgk...', '....kgbbbbgk....', '....kbaaaabk.wk.',
+    '....kbshssk.kwkk', '.....kksskk.kwwk', '...kkaaabkk..kk.', '..kaabbabbakkg..',
+    '..kaababbbsskg..', '...kkabgbbkk.k..', '....kabbbk...k..', '....kbkkbk...k..',
+    '...kbk..kbk..k..', '...kak..kbk.....', '..kbbk..kbbk....', '..kkk....kkk....',
+  ],
+  'red-2': [
+    '......kk........', '.....kabk....a..', '....kaabbk..agw.', '...kaabbbbk..a..',
+    '...kabkkkkk..k..', '...kbkhshbk..k..', '...kbbkskbk..k..', '...kbaakabk..k..',
+    '..kabaagbaabks..', '..kababbabbkkk..', '..kabbgbabbk.k..', '.kabbabbabbk.k..',
+    '.kaabbbaaabk.k..', '..kbbbbbbbk..k..', '...kkwkwkk......', '....kk.kk.......',
+  ],
 };
 
-function make(scene: Phaser.Scene, name: string, width: number, height: number, draw: (pixel: Pixel) => void): void {
-  const texture = scene.textures.createCanvas(name, width, height);
-  if (!texture) return;
-  const context = texture.getContext();
-  context.clearRect(0, 0, width, height);
-  draw((x, y, w, h, color) => {
-    context.fillStyle = color;
-    context.fillRect(x, y, w, h);
-  });
-  texture.refresh();
-}
-
 export function createPixelArt(scene: Phaser.Scene): void {
+  if (scene.textures.exists('battle-art')) return;
+  const texture = scene.textures.createCanvas('battle-art', TILE * (13 + Object.keys(portraits).length), TILE)!;
+  const context = texture.getContext();
+  let offset = 0;
+  const frame = (name: string, draw: (pixel: Pixel) => void): void => {
+    texture.add(name, 0, offset, 0, TILE, TILE);
+    draw((x, y, width, height, color) => {
+      context.fillStyle = color;
+      context.fillRect(offset + x, y, width, height);
+    });
+    offset += TILE;
+  };
   for (let variant = 0; variant < 4; variant++) {
-    make(scene, `grass-${variant}`, 24, 24, p => {
-      p(0, 0, 24, 24, palette.grass);
-      p(0, 0, 24, 2, palette.grassLight);
-      p(0, 22, 24, 2, palette.grassDark);
-      p(4 + variant * 2, 5, 2, 3, palette.grassLight);
-      p(17 - variant, 13, 2, 3, palette.grassDark);
-      p(10, 18 - variant, 3, 1, palette.grassLight);
-      if (variant === 2) { p(7, 10, 2, 2, '#d8cb82'); p(9, 11, 1, 1, palette.white); }
+    frame(`grass-${variant}`, p => {
+      p(0, 0, TILE, TILE, grass);
+      p(0, 0, 20, 7, ['#6d8e4f', '#688a4b', '#64864c', '#71904d'][variant]);
+      p(4 + variant, 5, 7, 2, '#739451'); p(2 + variant, 7, 11, 1, '#739451');
+      p(1, 12 + variant, 8, 3, '#627e48'); p(11, 16 - variant, 9, 2, '#739451');
+      p(2 + variant * 3, 3, 3, 1, grassLight);
+      p(3 + variant * 3, 2, 1, 1, grassLight);
+      p(15 - variant, 12, 3, 1, grassShade);
+      p(16 - variant, 11, 1, 1, grassLight);
+      p(1, 17 - variant, 3, 1, grassShade);
+      for (let tuft = 0; tuft < 12; tuft++) {
+        const x = (tuft * 13 + variant * 7) % 18 + 1;
+        const y = (tuft * 11 + variant * 3) % 18 + 1;
+        p(x, y, 1 + (tuft % 2), 1, tuft % 3 === 0 ? '#88a35d' : tuft % 3 === 1 ? '#769855' : '#5a7745');
+        if (tuft % 4 === 1) p(x, y - 1, 1, 1, '#86a15c');
+      }
+      p(12, 4 + variant, 1, 1, grassShade);
+      p(17, 16, 1, 2, grassLight); p(7, 12, 2, 1, grassShade);
+      if (variant === 3) {
+        p(5, 9, 1, 1, '#d6bc79'); p(6, 10, 1, 2, grassShade);
+        p(4, 17, 1, 1, '#bdac71'); p(9, 16, 1, 1, '#ccb77e');
+      }
     });
   }
-  make(scene, 'path', 24, 24, p => {
-    p(0, 0, 24, 24, palette.soil);
-    p(0, 0, 24, 2, '#d4ba80'); p(0, 22, 24, 2, palette.soilDark);
-    p(3, 7, 5, 1, palette.soilDark); p(15, 15, 6, 1, '#d4ba80');
-    p(10, 20, 3, 1, palette.soilDark);
+  for (const kind of ['horizontal', 'vertical', 'north', 'south'] as const) {
+    frame(kind, p => {
+      p(0, 0, TILE, TILE, grass);
+      if (kind !== 'vertical') {
+        p(0, 3, 20, 14, grassLight);
+        p(0, 5, 20, 10, clay);
+        p(0, 14, 20, 1, clayShade);
+        p(0, 5, 8, 1, '#ceb381'); p(13, 5, 7, 1, '#ceb381');
+        p(0, 15, 4, 1, clayShade); p(12, 15, 5, 1, clayShade);
+        p(4, 10, 2, 1, '#d3b987'); p(16, 8, 2, 1, '#94835d');
+        p(6, 14, 1, 1, grassLight); p(18, 5, 1, 1, grassLight);
+      }
+      if (kind !== 'horizontal') {
+        const top = kind === 'north' ? 8 : 0;
+        const height = kind === 'south' ? 11 : 20 - top;
+        p(5, top, 10, height, clay);
+        p(14, top, 1, height, clayShade);
+      }
+      p(7, 8, 3, 1, '#b7a778'); p(12, 11, 2, 1, clayShade);
+      p(3, 12, 2, 1, kind === 'vertical' ? grassLight : clayShade);
+    });
+  }
+  frame('wall', p => {
+    p(0, 0, 20, 20, grass);
+    p(1, 10, 19, 8, grassShade);
+    p(2, 5, 16, 11, '#34494c');
+    p(2, 3, 16, 8, '#73857e');
+    p(3, 2, 14, 3, '#aeb49a');
+    p(3, 3, 6, 1, '#c0bea0'); p(11, 3, 4, 1, '#c0bea0');
+    p(9, 3, 1, 5, '#415b5a'); p(3, 7, 14, 1, '#415b5a');
+    p(6, 8, 1, 5, '#415b5a'); p(13, 8, 1, 6, '#415b5a');
+    p(3, 11, 4, 2, '#70836f'); p(15, 5, 3, 2, grassLight);
+    p(4, 5, 4, 1, '#8a9985'); p(12, 9, 3, 1, '#8a9985');
+    p(5, 14, 11, 1, '#455958'); p(3, 14, 2, 2, '#455958');
+    p(1, 14, 3, 1, grassLight); p(7, 16, 5, 1, '#526b55');
+    p(16, 15, 3, 2, '#70836f');
   });
-  make(scene, 'wall', 24, 24, p => {
-    p(0, 0, 24, 24, palette.stoneDark);
-    p(1, 2, 22, 6, palette.stone); p(2, 3, 19, 1, '#a0aaa0');
-    p(1, 10, 10, 6, palette.stone); p(13, 10, 10, 6, palette.stone);
-    p(1, 18, 22, 5, palette.stone); p(4, 11, 5, 1, '#a0aaa0');
-    p(16, 11, 5, 1, '#a0aaa0'); p(3, 19, 18, 1, '#a0aaa0');
-    p(10, 3, 1, 5, palette.stoneDark); p(11, 11, 2, 5, palette.stoneDark);
+  frame('shrub', p => {
+    p(0, 0, 20, 20, grass);
+    p(2, 14, 16, 4, '#465f40'); p(5, 12, 10, 3, '#465f40');
+    p(3, 11, 7, 5, '#4c693d'); p(12, 10, 6, 5, '#4c693d');
+    p(6, 7, 9, 9, '#527440'); p(8, 5, 5, 4, '#527440');
+    p(3, 10, 5, 3, '#6e8a49'); p(6, 7, 7, 5, '#71944d'); p(12, 9, 5, 4, '#71944d');
+    p(8, 6, 4, 1, '#9cac66'); p(7, 8, 3, 2, '#91a45b');
+    p(4, 10, 2, 1, '#91a45b'); p(14, 9, 2, 2, '#91a45b');
+    p(11, 13, 5, 2, '#58763e'); p(5, 13, 3, 1, '#638049');
+    p(9, 16, 2, 2, '#716749'); p(6, 16, 2, 1, '#765f45'); p(14, 16, 2, 1, '#765f45');
   });
-  make(scene, 'blue-1', 24, 24, p => {
-    p(8, 2, 8, 3, palette.ink); p(7, 5, 10, 5, palette.blueLight);
-    p(9, 6, 6, 5, palette.skin); p(10, 8, 1, 1, palette.ink); p(14, 8, 1, 1, palette.ink);
-    p(6, 11, 12, 8, palette.blue); p(9, 12, 6, 3, palette.blueLight);
-    p(4, 12, 3, 8, palette.stone); p(4, 13, 3, 4, palette.white);
-    p(18, 11, 2, 10, palette.ink); p(18, 10, 2, 3, palette.gold);
-    p(7, 19, 4, 4, palette.ink); p(14, 19, 4, 4, palette.ink);
-    p(9, 14, 6, 2, palette.gold);
+  const water: (p: Pixel) => void = p => {
+    p(0, 0, 20, 20, '#4d85a0');
+    p(2, 4, 9, 1, '#65a3b6'); p(11, 13, 7, 1, '#65a3b6');
+    p(4, 16, 5, 1, '#3d6e94'); p(13, 6, 6, 1, '#3d6e94');
+    p(0, 8, 8, 2, '#548da6'); p(12, 15, 8, 1, '#548da6');
+    p(3, 4, 3, 1, '#699da0'); p(14, 13, 3, 1, '#699da0');
+    p(1, 18, 4, 1, '#5a94a9'); p(13, 2, 3, 1, '#5a94a9');
+  };
+  frame('water', water);
+  frame('bridge', p => {
+    water(p);
+    p(0, 4, 20, 12, '#5e4840'); p(0, 5, 20, 9, '#bd905b');
+    for (let x = 0; x < 20; x += 4) {
+      p(x, 5, 1, 9, '#825d49'); p(x + 1, 6, 2, 1, '#c5a16b');
+    }
+    p(0, 4, 20, 1, '#e0b47d'); p(0, 14, 20, 1, '#e0b47d');
   });
-  make(scene, 'blue-2', 24, 24, p => {
-    p(8, 1, 8, 4, '#66549a'); p(5, 5, 14, 3, '#8b75b4');
-    p(9, 7, 6, 5, palette.skin); p(10, 9, 1, 1, palette.ink); p(14, 9, 1, 1, palette.ink);
-    p(7, 12, 10, 9, '#66549a'); p(5, 15, 3, 6, '#8b75b4');
-    p(16, 15, 3, 6, '#8b75b4'); p(8, 21, 9, 2, palette.ink);
-    p(19, 5, 2, 17, palette.soilDark); p(18, 3, 4, 4, palette.gold);
-    p(10, 14, 4, 3, palette.blueLight);
+  frame('beacon', p => {
+    p(0, 0, 20, 20, grass);
+    p(0, 5, 19, 10, clay);
+    p(4, 4, 12, 11, '#ebcf79'); p(5, 5, 10, 9, '#5c614f');
+    p(7, 9, 6, 3, '#453f41'); p(8, 7, 4, 3, '#ec9d61');
+    p(9, 6, 2, 4, '#f9e696');
   });
-  make(scene, 'red-1', 24, 24, p => {
-    p(7, 3, 10, 5, palette.ink); p(5, 1, 3, 6, palette.gold); p(16, 1, 3, 6, palette.gold);
-    p(9, 7, 6, 5, palette.skin); p(10, 9, 1, 1, palette.ink); p(14, 9, 1, 1, palette.ink);
-    p(6, 12, 12, 8, palette.red); p(8, 13, 8, 3, palette.redLight);
-    p(3, 13, 4, 8, palette.ink); p(17, 12, 4, 9, palette.stone);
-    p(8, 20, 4, 3, palette.ink); p(14, 20, 4, 3, palette.ink);
-    p(11, 16, 3, 2, palette.gold);
-  });
-  make(scene, 'red-2', 24, 24, p => {
-    p(8, 2, 8, 5, palette.red); p(6, 6, 12, 4, palette.redLight);
-    p(9, 8, 6, 4, palette.skin); p(10, 10, 1, 1, palette.ink); p(14, 10, 1, 1, palette.ink);
-    p(7, 12, 11, 10, palette.red); p(8, 14, 8, 4, '#d17c66');
-    p(4, 15, 3, 7, palette.ink); p(18, 15, 3, 7, palette.ink);
-    p(7, 22, 11, 1, palette.ink); p(19, 3, 2, 17, palette.soilDark);
-    p(17, 1, 6, 4, palette.white); p(19, 3, 2, 1, palette.ink);
-  });
+  for (const [id, rows] of Object.entries(portraits)) {
+    const colors: Record<string, string> = { ...shared,
+      a: id === 'blue-1' ? '#78bdd0' : id === 'blue-2' ? '#a7a4e0' : id === 'blue-escort' ? '#77c9a1' : '#db876d',
+      b: id === 'blue-1' ? '#39698f' : id === 'blue-2' ? '#665b9b' : id === 'blue-escort' ? '#387e68' : '#984e54',
+    };
+    frame(id, p => rows.forEach((row, y) => [...row].forEach((symbol, x) => {
+      if (symbol !== '.') p(x + 2, y + 1, 1, 1, colors[symbol]);
+    })));
+  }
+  texture.refresh();
 }

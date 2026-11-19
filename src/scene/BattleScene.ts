@@ -1,272 +1,508 @@
 import Phaser from 'phaser';
-import { Chiptune, type Cue } from '../audio/chiptune';
+import { Chiptune } from '../audio/chiptune';
+import { chapter, type ChapterId } from '../game/chapters';
+import { loadCheckpoint, saveCheckpoint } from '../game/checkpoint';
+import { formationBonuses } from '../game/formation';
 import { enemyTurnSteps } from '../game/ai';
-import { attackRange, handleTile, initialState, movementRange, reduceGame, type GameState, type Point, type Unit } from '../game/rules';
+import { attackRange, battleProfile, combatForecast, handleTile, initialState, movementPath, movementRange, onBoard, reduceGame, terrainAt, type GameState, type Point, type Strike, type Unit } from '../game/rules';
+import { unitProfile } from '../game/units';
+import { center, MARGIN, TILE } from './board';
 import { createPixelArt } from './pixelArt';
+import { CombatStage, duelTiming } from './CombatStage';
+import type { ArenaGround } from './combatArt';
+import { FormationDialog } from './FormationDialog';
+import { drawPortrait, PORTRAIT_SIZE } from './portraits';
 
-const TILE = 72;
-const MARGIN = 20;
-const PROFILES: Record<string, { name: string; role: string }> = {
-  'blue-1': { name: 'アステル', role: '守護騎士' },
-  'blue-2': { name: 'リナ', role: '星詠み' },
-  'red-1': { name: '鉄牙', role: '略奪兵' },
-  'red-2': { name: '灰の術士', role: '呪術師' },
+const element = (id: string): HTMLElement => document.getElementById(id)!;
+const button = (id: string): HTMLButtonElement => document.querySelector<HTMLButtonElement>(`#${id}`)!;
+const same = (a: Point, b: Point): boolean => a.x === b.x && a.y === b.y;
+const strikeName = (unit: Unit): string => unitProfile(unit.id).reach === 1 ? '斬撃' : '術撃';
+
+type UnitView = {
+  body: Phaser.GameObjects.Container;
+  sprite: Phaser.GameObjects.Image;
+  health: Phaser.GameObjects.Graphics;
 };
-const center = (point: Point): { x: number; y: number } => ({
-  x: MARGIN + point.x * TILE + TILE / 2,
-  y: MARGIN + point.y * TILE + TILE / 2,
-});
 
 export class BattleScene extends Phaser.Scene {
-  private state: GameState = initialState();
-  private highlights!: Phaser.GameObjects.Graphics;
-  private views = new Map<string, Phaser.GameObjects.Container>();
-  private soundKit = new Chiptune();
+  private state = initialState();
+  private battlefield!: Phaser.GameObjects.Layer;
+  private marks!: Phaser.GameObjects.Graphics;
+  private cursorLayer!: Phaser.GameObjects.Graphics;
+  private readonly views = new Map<string, UnitView>();
+  private readonly soundKit = new Chiptune();
   private busy = false;
-  private generation = 0;
+  private cursor: Point | null = null;
+  private lastHit = '';
+  private combatStage!: CombatStage;
+  private readonly attackDialog = document.querySelector<HTMLDialogElement>('#attack-dialog')!;
+  private pendingTarget: string | null = null;
+  private bannerTimer?: number;
 
   constructor() { super('battle'); }
 
   create(): void {
     createPixelArt(this);
-    this.drawTerrain();
-    this.highlights = this.add.graphics();
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const point: Point = {
-        x: Math.floor((pointer.x - MARGIN) / TILE),
-        y: Math.floor((pointer.y - MARGIN) / TILE),
-      };
-      if (point.x < 0 || point.y < 0 || point.x >= this.state.width || point.y >= this.state.height) return;
-      void this.playerTile(point);
-    });
-    document.getElementById('end-turn')!.addEventListener('click', () => { void this.endPlayerTurn(); });
-    for (const id of ['restart', 'restart-outcome']) {
-      document.getElementById(id)!.addEventListener('click', () => this.restart());
+    this.combatStage = new CombatStage();
+    this.battlefield = this.add.layer().setDepth(-2);
+    let resumed = false;
+    try {
+      const checkpoint = loadCheckpoint(window.localStorage);
+      if (checkpoint) {
+        this.state = checkpoint;
+        resumed = true;
+      }
+    } catch {
+      element('checkpoint-status').textContent = 'このブラウザでは保存できません';
     }
-    document.getElementById('sound-toggle')!.addEventListener('click', () => {
+    this.drawTerrain();
+    this.marks = this.add.graphics();
+    this.cursorLayer = this.add.graphics().setDepth(3);
+    const board = element('game');
+    const pointerTile = (pointer: Phaser.Input.Pointer): Point => ({
+      x: Math.floor((pointer.x - MARGIN) / TILE),
+      y: Math.floor((pointer.y - MARGIN) / TILE),
+    });
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.setCursor(pointerTile(pointer)));
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      const point = pointerTile(pointer);
+      this.setCursor(point);
+      if (onBoard(this.state, point)) void this.playerTile(point);
+    });
+    board.addEventListener('pointerleave', () => this.setCursor(null));
+    board.addEventListener('blur', () => this.setCursor(null));
+    board.addEventListener('keydown', event => this.onKey(event));
+    this.attackDialog.addEventListener('close', () => {
+      const target = this.pendingTarget;
+      this.pendingTarget = null;
+      board.focus({ preventScroll: true });
+      if (target && this.attackDialog.returnValue === 'attack') {
+        void this.commitPlayerAction(reduceGame(this.state, { type: 'attack', id: target }));
+      }
+    });
+    button('end-turn').addEventListener('click', () => { void this.endPlayerTurn(); });
+    for (const id of ['restart', 'restart-outcome']) {
+      button(id).addEventListener('click', () => this.startChapter(this.state.chapterId));
+    }
+    const canPrepare = (): boolean => !this.busy && this.state.chapterId === 1 && this.state.winner === 'blue';
+    const formationDialog = new FormationDialog(formation => {
+      this.state = reduceGame(this.state, { type: 'prepare', formation });
+      this.checkpoint();
+    }, () => {
+      if (canPrepare()) this.startChapter(2);
+    });
+    button('next-chapter').addEventListener('click', () => {
+      if (canPrepare()) formationDialog.open(this.state.formation);
+    });
+    button('replay-campaign').addEventListener('click', () => this.startChapter(1));
+    button('sound-toggle').addEventListener('click', () => {
       this.soundKit.toggle();
-      document.getElementById('sound-toggle')!.textContent = this.soundKit.isEnabled ? '♪ 音声 ON' : '♪ 音声 OFF';
+      button('sound-toggle').setAttribute('aria-pressed', String(this.soundKit.isEnabled));
+      button('sound-toggle').textContent = this.soundKit.isEnabled ? '♪ 音声 ON' : '♪ 音声 OFF';
     });
     window.__GAME_TEST__ = { getState: () => structuredClone(this.state), isBusy: () => this.busy };
-    this.syncUnits(this.state, this.state);
+    this.resetUnits();
+    this.drawChapterLabels();
     this.drawUi();
-    this.showBanner('MISSION 01', '古い峠の防衛線');
+    if (resumed) element('checkpoint-status').textContent = '前回の続きから再開しました';
+    if (!this.state.winner) this.showChapterBanner();
+    else this.focusOutcome();
   }
 
   private drawTerrain(): void {
+    this.battlefield.removeAll(true);
+    const grid = this.add.graphics();
     for (let y = 0; y < this.state.height; y++) {
       for (let x = 0; x < this.state.width; x++) {
-        const isWall = this.state.walls.some(wall => wall.x === x && wall.y === y);
-        const isPath = y === 1 || y === 4 || (x === 2 && y >= 1 && y <= 4);
-        const key = isWall ? 'wall' : isPath ? 'path' : `grass-${(x * 3 + y * 5) % 4}`;
-        this.add.image(MARGIN + x * TILE, MARGIN + y * TILE, key).setOrigin(0).setDisplaySize(TILE, TILE);
+        const point = { x, y };
+        const variant = (x * 3 + y * 5) % 4;
+        const terrain = terrainAt(this.state, point);
+        const frame = terrain.frame === 'grass' ? `grass-${variant}` : terrain.frame;
+        const left = MARGIN + x * TILE;
+        const top = MARGIN + y * TILE;
+        this.battlefield.add(this.add.image(left, top, 'battle-art', frame).setOrigin(0));
+        grid.fillStyle(0x273a42, .16).fillRect(left, top, TILE, 1).fillRect(left, top, 1, TILE);
       }
     }
-    const frame = this.add.graphics();
-    frame.lineStyle(4, 0x213d4b);
-    frame.strokeRect(MARGIN - 2, MARGIN - 2, this.state.width * TILE + 4, this.state.height * TILE + 4);
+    this.battlefield.add(grid);
+    grid.lineStyle(1, 0xe0bb78).strokeRect(MARGIN - 1, MARGIN - 1, this.state.width * TILE + 2, this.state.height * TILE + 2);
+  }
+
+  private onKey(event: KeyboardEvent): void {
+    const arrows: Record<string, Point> = {
+      ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
+      ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+    };
+    const offset = arrows[event.key];
+    if (!offset && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    if (this.busy || this.state.winner) return;
+    if (!this.cursor) {
+      this.setCursor(this.state.units.find(unit => unit.id === this.state.selectedId) ??
+        this.state.units.find(unit => unit.team === 'blue') ?? { x: 0, y: 0 });
+    }
+    if (!this.cursor) return;
+    if (offset) {
+      const point = { x: this.cursor.x + offset.x, y: this.cursor.y + offset.y };
+      if (onBoard(this.state, point)) this.setCursor(point);
+    } else {
+      void this.playerTile(this.cursor);
+    }
+  }
+
+  private setCursor(point: Point | null): void {
+    const next = point && onBoard(this.state, point) ? point : null;
+    if ((!next && !this.cursor) || (next && this.cursor && same(next, this.cursor))) return;
+    this.cursor = next;
+    this.drawCursor();
+  }
+
+  private drawCursor(): void {
+    this.cursorLayer.clear();
+    const detail = element('tile-detail');
+    const chip = element('terrain-chip');
+    if (!this.cursor || this.busy || this.state.winner) {
+      chip.hidden = true;
+      detail.textContent = this.state.winner ? '戦闘終了' : this.busy ? '行動中…' : '青の味方を選択';
+      return;
+    }
+    const tile = terrainAt(this.state, this.cursor);
+    chip.hidden = false;
+    chip.querySelector('span')!.textContent = tile.cover ? `${tile.name} · 守り +1` : tile.blocked ? `${tile.name} · 通行不可` : tile.name;
+    const frame = this.textures.getFrame('battle-art', tile.frame === 'grass' ? 'grass-0' : tile.frame);
+    const context = chip.querySelector('canvas')!.getContext('2d')!;
+    const atlas = frame.source.image;
+    if (atlas instanceof HTMLCanvasElement) context.drawImage(atlas, frame.cutX, frame.cutY, TILE, TILE, 0, 0, TILE, TILE);
+    const location = center(this.cursor);
+    this.markCorners(this.cursorLayer, location, 9, 0xffedb5);
+    const unit = this.state.units.find(item => same(item, this.cursor!));
+    const selected = this.state.selectedId;
+    const coordinates = `${String.fromCharCode(65 + this.cursor.x)}${this.cursor.y + 1}`;
+    if (unit) {
+      const forecast = selected && combatForecast(this.state, selected, unit.id);
+      const cover = terrainAt(this.state, unit).cover;
+      detail.textContent = `${coordinates} · ${unitProfile(unit.id).name} · HP ${unit.hp}/${unit.maxHp}` +
+        (cover ? ' · 低木' : '') +
+        (forecast ? ` · 与ダメージ ${forecast.opening.damage}／反撃 ${forecast.counter?.damage ?? 'なし'}` : '');
+      return;
+    }
+    const route = selected ? movementPath(this.state, selected, this.cursor) : [];
+    for (const step of route) {
+      const { x, y } = center(step);
+      this.cursorLayer.fillStyle(0xc6e7ff).fillRect(x - 1, y - 1, 2, 2);
+    }
+    const terrain = tile.cover ? '低木・被ダメージ −1' : tile.blocked ? `${tile.name}・通行不可` : tile.name;
+    detail.textContent = `${coordinates} · ${route.length ? `移動 ${route.length}マス · ${terrain}` : terrain}`;
+  }
+
+  private markCorners(layer: Phaser.GameObjects.Graphics, { x, y }: Point, radius: number, color: number): void {
+    layer.fillStyle(color);
+    for (const left of [x - radius, x + radius - 4]) {
+      for (const top of [y - radius, y + radius - 4]) {
+        layer.fillRect(left, top === y - radius ? top : top + 3, 4, 1);
+        layer.fillRect(left === x - radius ? left : left + 3, top, 1, 4);
+      }
+    }
   }
 
   private async playerTile(point: Point): Promise<void> {
     if (this.busy || this.state.turn !== 'blue' || this.state.winner) return;
     this.soundKit.start();
-    const next = handleTile(this.state, point);
-    if (next === this.state) return;
+    const target = this.state.units.find(unit => unit.team === 'red' && same(unit, point));
+    const source = this.state.units.find(unit => unit.id === this.state.selectedId);
+    if (target && source) {
+      const forecast = combatForecast(this.state, source.id, target.id);
+      if (forecast) {
+        const cover = terrainAt(this.state, target).cover;
+        const lines = [
+          `攻撃  ${forecast.opening.damage}ダメージ · 敵HP ${target.hp} → ${forecast.opening.remainingHp}${cover ? '（低木 −1）' : ''}`,
+          forecast.counter ? `反撃  ${forecast.counter.damage}ダメージ · 味方HP ${source.hp} → ${forecast.counter.remainingHp}` : '反撃なし',
+        ];
+        for (const [role, unit] of [['source', source], ['target', target]] as const) {
+          drawPortrait(document.querySelector<HTMLCanvasElement>(`#forecast-${role}`)!, unit.id);
+          element(`forecast-${role}-name`).textContent = unitProfile(unit.id).name;
+          element(`forecast-${role}-weapon`).textContent = this.combatGear(unit);
+        }
+        element('attack-summary').replaceChildren(...lines.map(line => {
+          const row = document.createElement('p');
+          row.textContent = line;
+          return row;
+        }));
+        this.pendingTarget = target.id;
+        this.attackDialog.returnValue = '';
+        this.attackDialog.showModal();
+        return;
+      }
+    }
+    await this.commitPlayerAction(handleTile(this.state, point));
+  }
+
+  private async commitPlayerAction(next: GameState): Promise<void> {
+    if (this.busy || next === this.state) return;
     this.busy = true;
-    const previous = this.state;
-    this.state = next;
-    this.drawUi();
-    this.playCue(previous, next);
-    await this.syncUnits(previous, next);
-    this.busy = false;
-    this.drawUi();
+    await this.present(next);
+    this.finish();
   }
 
   private async endPlayerTurn(): Promise<void> {
     if (this.busy || this.state.turn !== 'blue' || this.state.winner) return;
     this.soundKit.start();
     this.busy = true;
-    const generation = this.generation;
     this.state = reduceGame(this.state, { type: 'endTurn' });
+    this.drawUi();
+    this.showBanner('敵フェイズ', '敵部隊が行動します');
     this.soundKit.play('turn');
-    this.drawUi();
-    this.showBanner('ENEMY PHASE', '敵の行動');
-    await this.pause(650);
+    await this.pause(700);
     for (const next of enemyTurnSteps(this.state)) {
-      if (this.generation !== generation) return;
-      const previous = this.state;
-      this.state = next;
-      this.drawUi();
-      this.playCue(previous, next);
-      await this.syncUnits(previous, next);
-      await this.pause(260);
+      if (next.turn === 'blue') {
+        this.state = next;
+        this.drawUi();
+        this.showBanner('味方フェイズ', `第${Math.ceil(next.turnNumber / 2)}ターン`);
+        this.soundKit.play('turn');
+        await this.pause(320);
+      } else {
+        await this.present(next);
+        if (!next.winner) await this.pause(120);
+      }
     }
-    if (this.generation !== generation) return;
-    this.busy = false;
-    this.drawUi();
-    if (!this.state.winner) this.showBanner('PLAYER PHASE', '青の部隊の番');
+    this.finish();
   }
 
-  private restart(): void {
-    this.generation++;
-    this.tweens.killAll();
-    this.views.forEach(view => view.destroy());
-    this.views.clear();
-    this.state = reduceGame(this.state, { type: 'restart' });
+  private finish(): void {
     this.busy = false;
-    this.syncUnits(this.state, this.state);
+    this.checkpoint();
+    this.drawUi();
+    if (this.state.winner) {
+      this.soundKit.play(this.state.winner === 'blue' ? 'win' : 'lose');
+      this.focusOutcome();
+    }
+  }
+
+  private checkpoint(): void {
+    try {
+      saveCheckpoint(window.localStorage, this.state);
+      element('checkpoint-status').textContent = 'この端末に自動保存済み';
+    } catch {
+      element('checkpoint-status').textContent = 'このブラウザでは保存できません';
+    }
+  }
+
+  private startChapter(id: ChapterId): void {
+    if (this.busy) return;
+    this.state = id === 2 ? initialState(2, this.state.formation) : initialState(1);
+    this.lastHit = '';
+    this.cursor = null;
+    this.drawTerrain();
+    this.resetUnits();
+    this.checkpoint();
+    this.drawChapterLabels();
     this.drawUi();
     this.soundKit.play('turn');
-    this.showBanner('MISSION 01', '古い峠の防衛線');
+    this.showChapterBanner();
+    element('game').focus({ preventScroll: true });
+  }
+
+  private drawChapterLabels(): void {
+    const { chapterId } = this.state;
+    const mission = chapter(chapterId);
+    document.querySelector('main')!.dataset.chapter = String(chapterId);
+    element('chapter-label').textContent = `第${chapterId}章`;
+    element('chapter-number').textContent = String(chapterId).padStart(2, '0');
+    element('seal-title').textContent = mission.title;
+    element('briefing').textContent = mission.briefing;
+    element('district').textContent = mission.district;
+    element('mission-objective').textContent = mission.objective;
+    element('escort-help').hidden = !mission.escort;
+  }
+
+  private showChapterBanner(): void {
+    this.showBanner(`第${this.state.chapterId}章`, chapter(this.state.chapterId).title);
+  }
+
+  private focusOutcome(): void {
+    const next = button('next-chapter');
+    (next.hidden ? button('restart-outcome') : next).focus({ preventScroll: true });
   }
 
   private drawUi(): void {
-    this.highlights.clear();
-    const selected = this.state.selectedId;
-    const moves = selected ? movementRange(this.state, selected) : [];
-    const attacks = selected ? attackRange(this.state, selected) : [];
-    for (const point of moves) {
-      this.highlights.fillStyle(0x78d4a6, 0.43);
-      this.highlights.fillRect(MARGIN + point.x * TILE + 3, MARGIN + point.y * TILE + 3, TILE - 6, TILE - 6);
+    this.marks.clear();
+    const selected = this.state.units.find(unit => unit.id === this.state.selectedId);
+    if (selected && !this.state.winner) {
+      const player = !this.busy && this.state.turn === 'blue';
+      for (const point of player ? movementRange(this.state, selected.id) : []) {
+        const { x, y } = center(point);
+        this.marks.fillStyle(0x649af5, .42).fillRect(x - 9, y - 9, 18, 18);
+        this.marks.fillStyle(0xb5d6ff, .82).fillRect(x - 2, y + 6, 4, 1);
+      }
+      const attacks = player ? attackRange(this.state, selected.id) : [];
+      for (const point of attacks) {
+        const { x, y } = center(point);
+        const target = this.state.units.some(unit => unit.team === 'red' && same(unit, point));
+        if (target) {
+          this.marks.fillStyle(0xe57245, .19).fillRect(x - 9, y - 9, 18, 18);
+          this.markCorners(this.marks, { x, y }, 8, 0xffb47b);
+        } else {
+          this.marks.fillStyle(0xeac084, .8).fillRect(x + 5, y - 6, 2, 2);
+        }
+      }
+      const { x, y } = center(selected);
+      this.marks.lineStyle(1, 0xffe295).strokeRect(x - 9, y - 9, 18, 18);
     }
-    for (const point of attacks) {
-      this.highlights.lineStyle(4, 0xf8af68, 0.95);
-      this.highlights.strokeRect(MARGIN + point.x * TILE + 5, MARGIN + point.y * TILE + 5, TILE - 10, TILE - 10);
-    }
-    const selectedUnit = this.state.units.find(unit => unit.id === selected);
-    if (selectedUnit) {
-      this.highlights.lineStyle(4, 0xffe49b);
-      this.highlights.strokeRect(MARGIN + selectedUnit.x * TILE + 4, MARGIN + selectedUnit.y * TILE + 4, TILE - 8, TILE - 8);
-    }
-    const phase = this.state.turn === 'blue' ? 'PLAYER PHASE' : 'ENEMY PHASE';
-    document.getElementById('turn-label')!.textContent = `${phase} · ${Math.ceil(this.state.turnNumber / 2)}`;
-    document.getElementById('status')!.textContent = this.state.message;
-    document.getElementById('selected-name')!.textContent = selectedUnit ? PROFILES[selectedUnit.id].name : 'ユニットを選択';
-    document.getElementById('selected-detail')!.textContent = selectedUnit
-      ? `${PROFILES[selectedUnit.id].role} · HP ${selectedUnit.hp}/${selectedUnit.maxHp} · ${selectedUnit.attacked ? '行動済み' : selectedUnit.moved ? '攻撃可能' : '移動・攻撃可能'}`
-      : '青のユニットをクリックして行動を決めます。';
-    const roster = document.getElementById('roster')!;
-    roster.replaceChildren(...this.state.units.filter(unit => unit.team === 'blue').map(unit => {
+    this.drawCursor();
+    const phase = this.state.turn === 'blue' ? '味方フェイズ' : '敵フェイズ';
+    document.querySelector<HTMLElement>('.battle-frame')!.dataset.turn = this.state.turn;
+    element('turn-label').textContent = `第${Math.ceil(this.state.turnNumber / 2)}ターン ／ ${phase}`;
+    element('status').textContent = !element('combat-stage').hidden ? '交戦中…'
+      : this.state.turn === 'red' && !this.state.winner ? '敵部隊が行動しています。' : this.state.message;
+    element('selected-name').textContent = selected ? unitProfile(selected.id).name : 'ユニットを選択';
+    const portrait = document.querySelector<HTMLCanvasElement>('#selected-portrait')!;
+    portrait.hidden = !selected;
+    if (selected) drawPortrait(portrait, selected.id);
+    const profile = selected && battleProfile(this.state, selected.id);
+    element('selected-detail').textContent = selected && profile
+      ? `${profile.role} · HP ${selected.hp}/${selected.maxHp} · ${selected.attacked ? '行動済み' : selected.moved ? profile.reach === 0 ? '移動済み' : '攻撃可' : '行動可'}`
+      : '騎士は隣接、星詠みは2マス先まで攻撃できます。';
+    const loadout = selected && this.state.chapterId === 2 ? formationBonuses(selected.id, this.state.formation).equipment : '';
+    element('selected-equipment').textContent = loadout ? `装備　${loadout}` : '';
+    element('selected-stats').textContent = profile?.reach === 0
+      ? `移動 ${profile.movement}　守備 ${profile.defense}　耐術 ${profile.ward}　攻撃不可` : profile
+      ? `攻撃 ${profile.power}　守備 ${profile.defense}　耐術 ${profile.ward}　射程 ${profile.reach}` : '';
+    element('combat-log').textContent = this.lastHit || 'まだ交戦していません。';
+    const escortId = chapter(this.state.chapterId).escort?.id;
+    element('roster').replaceChildren(...this.state.units.filter(unit => unit.team === 'blue').map(unit => {
       const item = document.createElement('div');
-      item.className = `roster-unit${unit.attacked ? ' spent' : ''}`;
-      item.textContent = `${PROFILES[unit.id].name}  ♥ ${unit.hp}`;
+      item.className = `roster-unit${unit.id === escortId ? ' escort' : ''}${unit.attacked ? ' spent' : ''}`;
+      const portrait = document.createElement('canvas');
+      portrait.width = portrait.height = PORTRAIT_SIZE;
+      portrait.className = 'roster-portrait';
+      portrait.setAttribute('aria-hidden', 'true');
+      drawPortrait(portrait, unit.id);
+      const info = document.createElement('div');
+      const name = document.createElement('strong');
+      name.textContent = unitProfile(unit.id).name;
+      const hp = document.createElement('small');
+      hp.textContent = `HP ${unit.hp}/${unit.maxHp}`;
+      info.append(name, hp);
+      item.append(portrait, info);
       return item;
     }));
-    (document.getElementById('end-turn') as HTMLButtonElement).disabled = this.busy || this.state.turn !== 'blue' || this.state.winner !== null;
-    const outcome = document.getElementById('outcome')!;
-    outcome.hidden = this.state.winner === null;
+    button('end-turn').disabled = this.busy || this.state.turn !== 'blue' || this.state.winner !== null;
+    button('restart').disabled = this.busy;
+    const finished = !this.busy && this.state.winner !== null;
+    const escort = chapter(this.state.chapterId).escort;
+    element('outcome').hidden = !finished;
+    button('next-chapter').hidden = !finished || this.state.chapterId !== 1 || this.state.winner !== 'blue';
+    button('replay-campaign').hidden = !finished || !escort || this.state.winner !== 'blue';
+    button('restart-outcome').classList.toggle('secondary', !button('next-chapter').hidden);
+    button('replay-campaign').classList.add('secondary');
     if (this.state.winner) {
-      document.getElementById('outcome-heading')!.textContent = this.state.winner === 'blue' ? '戦いに勝利！' : '部隊は敗走した';
-      document.getElementById('outcome-copy')!.textContent = this.state.winner === 'blue'
-        ? '峠を守り抜いた。次の戦いに備えよう。' : 'もう一度、陣形を整えて挑もう。';
+      element('outcome').dataset.result = this.state.winner;
+      const win = this.state.winner === 'blue';
+      element('outcome-heading').textContent = win ? escort ? '護衛成功！' : '戦いに勝利！' : escort ? '護衛失敗' : '部隊は敗走した';
+      element('outcome-copy').textContent = win
+        ? escort ? 'ナギが灯火台に到着し、東岸に灯がともった。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
+        : escort ? 'ナギを守りきれなかった。' : 'もう一度、陣形を整えて挑もう。';
     }
   }
 
-  private syncUnits(previous: GameState, next: GameState): Promise<void> {
-    const animations: Promise<void>[] = [];
-    const hit = previous.units.find(old => {
-      const current = next.units.find(unit => unit.id === old.id);
-      return !current || current.hp < old.hp;
-    });
-    if (hit && previous.selectedId) {
-      const attacker = this.views.get(previous.selectedId);
-      const source = previous.units.find(unit => unit.id === previous.selectedId);
-      if (attacker && source) {
-        animations.push(new Promise(resolve => {
-          this.tweens.add({ targets: attacker,
-            x: attacker.x + Math.sign(hit.x - source.x) * 13,
-            y: attacker.y + Math.sign(hit.y - source.y) * 13,
-            duration: 95, yoyo: true, onComplete: () => resolve() });
-        }));
-      }
+  private async present(next: GameState): Promise<void> {
+    const previous = this.state;
+    const source = previous.units.find(unit => unit.id === previous.selectedId);
+    const moved = source && next.units.find(unit => unit.id === source.id && !same(source, unit));
+    const hit = source && previous.units.find(old => old.team !== source.team &&
+      (next.units.find(unit => unit.id === old.id)?.hp ?? 0) < old.hp);
+    if (source && hit) {
+      const forecast = combatForecast(previous, source.id, hit.id)!;
+      const terrain = [terrainAt(previous, source).frame, terrainAt(previous, hit).frame];
+      const ground: ArenaGround = terrain.includes('bridge') ? 'wood'
+        : terrain.some(tile => ['horizontal', 'north', 'south', 'vertical'].includes(tile)) ? 'road' : 'meadow';
+      this.combatStage.open(source, hit, ground, unit => this.combatGear(unit));
+      this.drawUi();
+      await this.pause(duelTiming.enter);
+      await this.showHit(source, hit, forecast.opening, false);
+      if (forecast.counter) await this.showHit(hit, source, forecast.counter, true);
+      this.combatStage.exit();
+      await this.pause(duelTiming.exit);
+      this.combatStage.close();
     }
-    for (const unit of next.units) {
-      let view = this.views.get(unit.id);
-      if (!view) {
-        view = this.makeUnit(unit);
-        this.views.set(unit.id, view);
+    this.state = next;
+    this.drawUi();
+    if (source && moved) {
+      const { body } = this.views.get(source.id)!;
+      this.soundKit.play('move');
+      for (const point of movementPath(previous, source.id, moved)) {
+        await this.tween(body, { ...center(point), duration: 105, ease: 'Sine.easeInOut' });
       }
-      const old = previous.units.find(item => item.id === unit.id);
-      const location = center(unit);
-      if (old && (old.x !== unit.x || old.y !== unit.y)) {
-        const moving = view;
-        animations.push(new Promise(resolve => {
-          this.tweens.add({ targets: moving, x: location.x, y: location.y, duration: 260, ease: 'Sine.easeInOut',
-            onComplete: () => resolve() });
-        }));
-      } else { view.setPosition(location.x, location.y); }
+    } else if (!hit) {
+      this.soundKit.play('select');
+    }
+    for (const unit of next.units) this.updateHealth(this.views.get(unit.id)!, unit);
+  }
+
+  private combatGear(unit: Unit): string {
+    const kit = this.state.chapterId === 2 ? formationBonuses(unit.id, this.state.formation).equipment : '';
+    if (kit) return kit;
+    const role = unitProfile(unit.id);
+    if (!role.reach) return '渡し守の杖';
+    if (unit.id === 'blue-1') return '峠の剣';
+    if (unit.id === 'blue-2') return '星詠みの杖';
+    return role.style === 'blade' ? '鉄牙の斧' : '灰火の杖';
+  }
+
+  private async showHit(source: Unit, target: Unit, strike: Strike, counter: boolean): Promise<void> {
+    this.combatStage.windup(strike, counter);
+    await this.pause(duelTiming[unitProfile(source.id).style]);
+    this.soundKit.play('attack');
+    const { damage, remainingHp } = strike;
+    this.combatStage.impact(strike);
+    this.lastHit = `${unitProfile(source.id).name}の${counter ? '反撃' : strikeName(source)} → ${unitProfile(target.id).name} −${damage}${remainingHp ? '' : '（撃破）'}`;
+    this.drawUi();
+    this.soundKit.play('hurt');
+    const victim = this.views.get(target.id)!;
+    this.updateHealth(victim, { ...target, hp: remainingHp });
+    await this.pause(duelTiming.impact);
+    if (remainingHp === 0) {
+      this.combatStage.fall(target.id);
+      await this.pause(160);
+      victim.body.destroy();
+      this.views.delete(target.id);
+    }
+  }
+
+  private resetUnits(): void {
+    for (const view of this.views.values()) view.body.destroy();
+    this.views.clear();
+    for (const unit of this.state.units) {
+      const { x, y } = center(unit);
+      const shadow = this.add.ellipse(0, 5, 13, 4, 0x233641, .7);
+      const sprite = this.add.image(0, -1, 'battle-art', unit.id).setFlipX(unit.team === 'red');
+      const health = this.add.graphics();
+      const body = this.add.container(x, y, [shadow, sprite, health]).setDepth(2);
+      const view = { body, sprite, health };
+      this.views.set(unit.id, view);
       this.updateHealth(view, unit);
-      if (old && old.hp > unit.hp) {
-        const sprite = view.getAt(1) as Phaser.GameObjects.Image;
-        sprite.setTintFill(0xffffff);
-        this.time.delayedCall(150, () => { if (sprite.active) sprite.clearTint(); });
-        this.floatDamage(location, old.hp - unit.hp);
-        animations.push(this.pause(220));
-      }
-      view.setAlpha(unit.attacked ? 0.7 : 1);
     }
-    for (const [id, view] of this.views) {
-      if (next.units.some(unit => unit.id === id)) continue;
-      const old = previous.units.find(unit => unit.id === id);
-      if (old) this.floatDamage(center(old), old.hp);
-      this.views.delete(id);
-      animations.push(new Promise(resolve => {
-        this.tweens.add({ targets: view, alpha: 0, y: view.y - 18, duration: 250,
-          onComplete: () => { view.destroy(); resolve(); } });
-      }));
-    }
-    return Promise.all(animations).then(() => undefined);
   }
 
-  private makeUnit(unit: Unit): Phaser.GameObjects.Container {
-    const shadow = this.add.rectangle(0, 17, 44, 9, 0x1b3538, 0.55);
-    const sprite = this.add.image(0, -6, unit.id).setDisplaySize(54, 54);
-    const health = this.add.graphics();
-    const view = this.add.container(center(unit).x, center(unit).y, [shadow, sprite, health]);
-    this.tweens.add({ targets: sprite, y: -8, duration: 750, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
-    this.updateHealth(view, unit);
-    return view;
+  private updateHealth(view: UnitView, unit: Unit): void {
+    const bar = view.health.clear();
+    bar.fillStyle(0x20303a).fillRect(-8, 7, 16, 3);
+    bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-7, 8, Math.round(14 * unit.hp / unit.maxHp), 1);
+    bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-9, 4, 2, 2);
+    view.sprite.setAlpha(unit.attacked ? .73 : 1);
   }
 
-  private updateHealth(view: Phaser.GameObjects.Container, unit: Unit): void {
-    const bar = view.getAt(2) as Phaser.GameObjects.Graphics;
-    bar.clear();
-    bar.fillStyle(0x1f343c).fillRect(-23, 24, 46, 8);
-    bar.fillStyle(unit.team === 'blue' ? 0x73d8b7 : 0xf19077).fillRect(-21, 26, (42 * unit.hp) / unit.maxHp, 4);
-  }
-
-  private floatDamage(location: Point, amount: number): void {
-    const label = this.add.text(location.x, location.y - 26, `−${amount}`, {
-      fontFamily: 'monospace', fontSize: '22px', color: '#fff0ae', fontStyle: 'bold',
-      stroke: '#523b3d', strokeThickness: 4,
-    }).setOrigin(0.5);
-    this.tweens.add({ targets: label, y: label.y - 30, alpha: 0, duration: 600,
-      onComplete: () => label.destroy() });
-  }
-
-  private playCue(previous: GameState, next: GameState): void {
-    let cue: Cue = 'select';
-    if (next.winner) cue = next.winner === 'blue' ? 'win' : 'lose';
-    else if (previous.turn !== next.turn) cue = 'turn';
-    else if (next.units.some(unit => (previous.units.find(old => old.id === unit.id)?.hp ?? 0) > unit.hp) ||
-      next.units.length < previous.units.length) cue = 'attack';
-    else if (next.units.some(unit => { const old = previous.units.find(item => item.id === unit.id);
-      return old && (old.x !== unit.x || old.y !== unit.y); })) cue = 'move';
-    this.soundKit.play(cue);
-  }
-
-  private showBanner(eyebrow: string, title: string): void {
-    const banner = document.getElementById('phase-banner')!;
-    banner.replaceChildren();
-    const small = document.createElement('span');
-    small.textContent = eyebrow;
-    const large = document.createElement('strong');
-    large.textContent = title;
-    banner.append(small, large);
-    banner.classList.remove('visible');
-    void banner.offsetWidth;
+  private showBanner(phase: string, title: string): void {
+    const banner = element('phase-banner');
+    banner.querySelector('span')!.textContent = phase;
+    banner.querySelector('strong')!.textContent = title;
     banner.classList.add('visible');
-    window.setTimeout(() => banner.classList.remove('visible'), 1100);
+    window.clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => banner.classList.remove('visible'), 780);
+  }
+
+  private tween(targets: object, settings: Omit<Phaser.Types.Tweens.TweenBuilderConfig, 'targets'>): Promise<void> {
+    return new Promise(resolve => this.tweens.add({ ...settings, targets, onComplete: () => resolve() }));
   }
 
   private pause(ms: number): Promise<void> {

@@ -13,8 +13,9 @@ it('moves the enemy team, attacks adjacent heroes, then returns control', () => 
 
   const nearby = reduceGame(initialState(), { type: 'endTurn' });
   nearby.units.find(unit => unit.id === 'red-1')!.x = 2;
+  nearby.units = nearby.units.filter(unit => ['blue-1', 'red-1'].includes(unit.id));
   const attacked = enemyTurnSteps(nearby).at(-1)!;
-  expect(attacked.units.find(unit => unit.id === 'blue-1')?.hp).toBe(4);
+  expect(attacked.units.find(unit => unit.id === 'blue-1')?.hp).toBe(9);
 });
 
 it('can restart after victory', () => {
@@ -31,4 +32,18 @@ it('ends the encounter when the enemy defeats the last hero', () => {
   const final = enemyTurnSteps(state).at(-1)!;
   expect(final.winner).toBe('red');
   expect(final.turn).toBe('red');
+});
+
+it('spends movement to cast from outside the knight’s counter range', () => {
+  const state = reduceGame(initialState(), { type: 'endTurn' });
+  const knight = state.units.find(unit => unit.id === 'blue-1')!;
+  const mage = state.units.find(unit => unit.id === 'red-2')!;
+  Object.assign(knight, { x: 2, y: 1 });
+  Object.assign(mage, { x: 3, y: 1 });
+  state.units = [knight, mage];
+  const final = enemyTurnSteps(state).at(-1)!;
+  const caster = final.units.find(unit => unit.id === mage.id)!;
+  expect(Math.abs(caster.x - knight.x) + Math.abs(caster.y - knight.y)).toBe(2);
+  expect(caster.hp).toBe(mage.hp);
+  expect(final.units.find(unit => unit.id === knight.id)?.hp).toBe(6);
 });
