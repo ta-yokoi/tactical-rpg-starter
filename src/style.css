@@ -347,8 +347,8 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
   position: relative;
   z-index: 1;
   display: block;
-  width: 176px;
-  height: 176px;
+  width: 192px;
+  height: 192px;
   image-rendering: pixelated;
 }
 .duel-actor::before {
@@ -439,14 +439,13 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
 .forecast-portraits strong { align-self: end; color: #f6e3b9; font-size: 12px; }
 .forecast-portraits small { align-self: start; color: #eee0d0; font-size: 10px; }
 @media (max-width: 760px) {
-  .duel-actor canvas { width: 132px; height: 132px; }
+  .duel-actor canvas { width: 128px; height: 128px; }
   .duel-card { grid-template-columns: 32px minmax(0, 1fr); gap: 5px; }
   .duel-card canvas { width: 32px; height: 32px; }
   .duel-readout { gap: 2px 4px; }
   .duel-weapon { font-size: 9px; }
 }
 @media (max-width: 480px) {
-  .duel-actor canvas { width: 88px; height: 88px; }
   .duel-damage { font-size: 20px; }
   .duel-readout strong { font-size: 11px; }
   .duel-readout small { font-size: 10px; }
@@ -456,7 +455,7 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
 @media (max-width: 371px) {
   .battle-window:has(.combat-stage:not([hidden])) { position: relative; isolation: isolate; }
   .duel-card { padding-block: 2px; }
-  .duel-actor canvas { width: 44px; height: 44px; }
+  .duel-actor canvas { width: 64px; height: 64px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .combat-stage, .combat-stage .duel-actor, .combat-stage .duel-actor canvas, .duel-damage { animation: none !important; }

@@ -118,7 +118,7 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
               pixels: rgba.filter((value, index) => index % 4 === 3 && value > 0).length,
             };
           });
-          expect(painted.width).toBe(44);
+          expect(painted.width).toBe(64);
           expect(painted.pixels).toBeGreaterThan(300);
           await page.screenshot({ path: testInfo.outputPath('battle-impact.png'), fullPage: true });
           if (forecast.counter) await expect(page.locator('#stage-label')).toContainText(`反撃　−${forecast.counter.damage}`);

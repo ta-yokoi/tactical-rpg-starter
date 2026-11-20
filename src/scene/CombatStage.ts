@@ -1,4 +1,5 @@
-import { COMBAT_SIZE, combatBackdrop, drawCombatant, type ArenaGround, type Pose } from './combatArt';
+import { combatBackdrop, type ArenaGround } from './combatArt';
+import { COMBAT_SIZE, drawCombatant, type Pose } from './combatSprites';
 import type { Strike, Unit } from '../game/rules';
 import { unitProfile } from '../game/units';
 import { drawPortrait } from './portraits';
