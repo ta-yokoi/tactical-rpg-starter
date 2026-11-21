@@ -219,7 +219,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
       const target = (await state()).units.find(item => item.id === targetId)!;
       await tile(target.x, target.y);
       const attackDialog = page.getByRole('dialog', { name: '戦闘予告' });
-      if (id === 'blue-2' && targetId === 'red-2') {
+      if ((await state()).chapterId === 2 && id === 'blue-2' && targetId === 'red-2') {
         await expect(attackDialog).toContainText('攻撃 4ダメージ');
         await expect(attackDialog).toContainText('低木 −1');
         await page.screenshot({ path: testInfo.outputPath('formation-combat.png'), fullPage: true });
