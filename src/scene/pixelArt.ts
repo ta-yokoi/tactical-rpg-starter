@@ -12,7 +12,7 @@ const clayShade = '#9b805c';
 
 export function createPixelArt(scene: Phaser.Scene): void {
   if (scene.textures.exists('battle-art')) return;
-  const texture = scene.textures.createCanvas('battle-art', TILE * (15 + mapUnitIds.length * mapFacings.length * mapPoses.length), TILE)!;
+  const texture = scene.textures.createCanvas('battle-art', TILE * (16 + mapUnitIds.length * mapFacings.length * mapPoses.length), TILE)!;
   const context = texture.getContext();
   let offset = 0;
   const frame = (name: string, draw: (pixel: Pixel) => void): void => {
@@ -131,6 +131,16 @@ export function createPixelArt(scene: Phaser.Scene): void {
     p(4, 4, 12, 11, '#ebcf79'); p(5, 5, 10, 9, '#5c614f');
     p(7, 9, 6, 3, '#453f41'); p(8, 7, 4, 3, '#ec9d61');
     p(9, 6, 2, 4, '#f9e696');
+  });
+  frame('watchtower', p => {
+    p(0, 0, 20, 20, grass);
+    p(0, 5, 20, 10, clay);
+    p(2, 15, 16, 4, '#4c524b'); p(3, 13, 14, 4, '#7f8576');
+    p(4, 11, 12, 4, '#abb098'); p(5, 3, 10, 9, '#555e5b');
+    p(6, 4, 8, 7, '#9a9e89'); p(6, 4, 8, 1, '#dbcb9b');
+    p(8, 6, 5, 4, '#414a4d'); p(9, 6, 3, 3, '#f3ae60');
+    p(10, 5, 1, 3, '#fff0a3'); p(6, 15, 3, 1, '#b8b59b');
+    p(12, 15, 3, 1, '#b8b59b'); p(7, 17, 6, 1, '#858979');
   });
   for (const id of mapUnitIds) {
     for (const facing of mapFacings) {

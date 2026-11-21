@@ -96,6 +96,12 @@ export class BattleScene extends Phaser.Scene {
     });
     button('next-chapter').addEventListener('click', () => {
       if (canPrepare()) formationDialog.open(this.state.formation);
+      else if (!this.busy && this.state.chapterId === 2 && this.state.winner === 'blue') this.startChapter(3);
+    });
+    button('show-ending').addEventListener('click', () => {
+      if (!this.busy && this.state.chapterId === 3 && this.state.winner === 'blue') {
+        document.querySelector<HTMLDialogElement>('#ending-dialog')!.showModal();
+      }
     });
     button('replay-campaign').addEventListener('click', () => this.startChapter(1));
     button('sound-toggle').addEventListener('click', () => {
@@ -187,9 +193,9 @@ export class BattleScene extends Phaser.Scene {
     const coordinates = `${String.fromCharCode(65 + this.cursor.x)}${this.cursor.y + 1}`;
     if (unit) {
       const forecast = selected && combatForecast(this.state, selected, unit.id);
-      const cover = terrainAt(this.state, unit).cover;
+      const cover = terrainAt(this.state, unit);
       detail.textContent = `${coordinates} · ${unitProfile(unit.id).name} · HP ${unit.hp}/${unit.maxHp}` +
-        (cover ? ' · 低木' : '') +
+        (cover.cover ? ` · ${cover.name}` : '') +
         (forecast ? ` · 与ダメージ ${forecast.opening.damage}／反撃 ${forecast.counter?.damage ?? 'なし'}` : '');
       return;
     }
@@ -198,7 +204,7 @@ export class BattleScene extends Phaser.Scene {
       const { x, y } = center(step);
       this.cursorLayer.fillStyle(0xc6e7ff).fillRect(x - 1, y - 1, 2, 2);
     }
-    const terrain = tile.cover ? '低木・被ダメージ −1' : tile.blocked ? `${tile.name}・通行不可` : tile.name;
+    const terrain = tile.cover ? `${tile.name}・被ダメージ −1` : tile.blocked ? `${tile.name}・通行不可` : tile.name;
     detail.textContent = `${coordinates} · ${route.length ? `移動 ${route.length}マス · ${terrain}` : terrain}`;
   }
 
@@ -220,9 +226,9 @@ export class BattleScene extends Phaser.Scene {
     if (target && source) {
       const forecast = combatForecast(this.state, source.id, target.id);
       if (forecast) {
-        const cover = terrainAt(this.state, target).cover;
+        const cover = terrainAt(this.state, target);
         const lines = [
-          `攻撃  ${forecast.opening.damage}ダメージ · 敵HP ${target.hp} → ${forecast.opening.remainingHp}${cover ? '（低木 −1）' : ''}`,
+          `攻撃  ${forecast.opening.damage}ダメージ · 敵HP ${target.hp} → ${forecast.opening.remainingHp}${cover.cover ? `（${cover.name} −1）` : ''}`,
           forecast.counter ? `反撃  ${forecast.counter.damage}ダメージ · 味方HP ${source.hp} → ${forecast.counter.remainingHp}` : '反撃なし',
         ];
         for (const [role, unit] of [['source', source], ['target', target]] as const) {
@@ -296,7 +302,7 @@ export class BattleScene extends Phaser.Scene {
 
   private startChapter(id: ChapterId): void {
     if (this.busy) return;
-    this.state = id === 2 ? initialState(2, this.state.formation) : initialState(1);
+    this.state = id === 1 ? initialState(1) : initialState(id, this.state.formation);
     this.lastHit = '';
     this.cursor = null;
     this.drawTerrain();
@@ -313,26 +319,30 @@ export class BattleScene extends Phaser.Scene {
     const { chapterId } = this.state;
     const mission = chapter(chapterId);
     document.querySelector('main')!.dataset.chapter = String(chapterId);
-    element('chapter-label').textContent = `第${chapterId}章`;
+    element('chapter-label').textContent = chapterId === 3 ? '終章' : `第${chapterId}章`;
     element('chapter-number').textContent = String(chapterId).padStart(2, '0');
     element('seal-title').textContent = mission.title;
     element('briefing').textContent = mission.briefing;
     element('district').textContent = mission.district;
     element('mission-objective').textContent = mission.objective;
     element('escort-help').hidden = !mission.escort;
+    element('hold-help').hidden = !mission.hold;
   }
 
   private showChapterBanner(): void {
-    this.showBanner(`第${this.state.chapterId}章`, chapter(this.state.chapterId).title);
+    this.showBanner(this.state.chapterId === 3 ? '終章' : `第${this.state.chapterId}章`, chapter(this.state.chapterId).title);
   }
 
   private focusOutcome(): void {
     const next = button('next-chapter');
-    (next.hidden ? button('restart-outcome') : next).focus({ preventScroll: true });
+    const ending = button('show-ending');
+    (next.hidden ? ending.hidden ? button('restart-outcome') : ending : next).focus({ preventScroll: true });
   }
 
   private drawUi(): void {
     this.marks.clear();
+    const objective = chapter(this.state.chapterId).hold;
+    if (objective && !this.state.winner) this.markCorners(this.marks, center(objective.point), 9, 0xffd785);
     const selected = this.state.units.find(unit => unit.id === this.state.selectedId);
     if (selected && !this.state.winner) {
       const player = !this.busy && this.state.turn === 'blue';
@@ -369,7 +379,7 @@ export class BattleScene extends Phaser.Scene {
     element('selected-detail').textContent = selected && profile
       ? `${profile.role} · HP ${selected.hp}/${selected.maxHp} · ${selected.attacked ? '行動済み' : selected.moved ? profile.reach === 0 ? '移動済み' : '攻撃可' : '行動可'}`
       : '騎士は隣接、星詠みは2マス先まで攻撃できます。';
-    const loadout = selected && this.state.chapterId === 2 ? formationBonuses(selected.id, this.state.formation).equipment : '';
+    const loadout = selected && this.state.chapterId !== 1 ? formationBonuses(selected.id, this.state.formation).equipment : '';
     element('selected-equipment').textContent = loadout ? `装備　${loadout}` : '';
     element('selected-stats').textContent = profile?.reach === 0
       ? `移動 ${profile.movement}　守備 ${profile.defense}　耐術 ${profile.ward}　攻撃不可` : profile
@@ -396,18 +406,29 @@ export class BattleScene extends Phaser.Scene {
     button('end-turn').disabled = this.busy || this.state.turn !== 'blue' || this.state.winner !== null;
     button('restart').disabled = this.busy;
     const finished = !this.busy && this.state.winner !== null;
-    const escort = chapter(this.state.chapterId).escort;
+    const won = finished && this.state.winner === 'blue';
+    const { escort, hold } = chapter(this.state.chapterId);
+    const progress = element('hold-progress');
+    progress.hidden = !hold;
+    if (hold) progress.textContent = `防衛 ${this.state.holdTurns} / ${hold.turns}`;
+
     element('outcome').hidden = !finished;
-    button('next-chapter').hidden = !finished || this.state.chapterId !== 1 || this.state.winner !== 'blue';
-    button('replay-campaign').hidden = !finished || !escort || this.state.winner !== 'blue';
-    button('restart-outcome').classList.toggle('secondary', !button('next-chapter').hidden);
+    const next = button('next-chapter');
+    next.hidden = !won || Boolean(hold);
+    next.textContent = escort ? '終章へ進む →' : '編成へ進む →';
+    const ending = button('show-ending');
+    ending.hidden = !won || !hold;
+    button('replay-campaign').hidden = !won || !hold;
+    button('restart-outcome').classList.toggle('secondary', !next.hidden || !ending.hidden);
     button('replay-campaign').classList.add('secondary');
     if (this.state.winner) {
       element('outcome').dataset.result = this.state.winner;
       const win = this.state.winner === 'blue';
-      element('outcome-heading').textContent = win ? escort ? '護衛成功！' : '戦いに勝利！' : escort ? '護衛失敗' : '部隊は敗走した';
+      element('outcome-heading').textContent = win
+        ? hold ? '見張り台を守り抜いた！' : escort ? '護衛成功！' : '戦いに勝利！'
+        : escort ? '護衛失敗' : hold ? '見張り台は陥落した' : '部隊は敗走した';
       element('outcome-copy').textContent = win
-        ? escort ? 'ナギが灯火台に到着し、東岸に灯がともった。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
+        ? hold ? '尾根の火が夜明けを告げた。' : escort ? 'ナギが灯火台に到着した。尾根の見張り台へ向かおう。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
         : escort ? 'ナギを守りきれなかった。' : 'もう一度、陣形を整えて挑もう。';
     }
   }
@@ -457,7 +478,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private combatGear(unit: Unit): string {
-    const kit = this.state.chapterId === 2 ? formationBonuses(unit.id, this.state.formation).equipment : '';
+    const kit = this.state.chapterId !== 1 ? formationBonuses(unit.id, this.state.formation).equipment : '';
     if (kit) return kit;
     const role = unitProfile(unit.id);
     if (!role.reach) return '渡し守の杖';

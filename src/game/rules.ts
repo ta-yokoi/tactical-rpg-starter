@@ -16,6 +16,7 @@ export type GameState = {
   turnNumber: number;
   selectedId: string | null;
   winner: Team | null;
+  holdTurns: number;
   message: string;
 };
 export type Action = { type: 'select'; id: string } | { type: 'move'; x: number; y: number } |
@@ -34,7 +35,7 @@ const unitAt = (state: GameState, point: Point): Unit | undefined =>
 export function terrainAt(state: GameState, point: Point) {
   const terrain = chapterTerrain(state.chapterId, point);
   if (state.walls.some(wall => key(wall) === key(point))) return { name: '石垣', frame: 'wall', cover: 0, blocked: true };
-  return { ...terrain, cover: Number(terrain.frame === 'shrub'), blocked: terrain.frame === 'water' };
+  return { ...terrain, cover: Number(terrain.frame === 'shrub' || terrain.frame === 'watchtower'), blocked: terrain.frame === 'water' };
 }
 
 export function initialState(chapterId: ChapterId = 1, formation: Formation = defaultFormation): GameState {
@@ -43,23 +44,24 @@ export function initialState(chapterId: ChapterId = 1, formation: Formation = de
     chapterId, formation: { ...formation }, width: mission.map[0].length, height: mission.map.length,
     walls: mission.map.flatMap((row, y) => [...row].flatMap((tile, x) => tile === '#' ? [{ x, y }] : [])),
     units: mission.units.map(unit => {
-      const hp = unit.maxHp + (chapterId === 2 ? formationBonuses(unit.id, formation).hp : 0);
+      const hp = unit.maxHp + (chapterId !== 1 ? formationBonuses(unit.id, formation).hp : 0);
       return { ...unit, hp, maxHp: hp };
     }),
-    turn: 'blue', turnNumber: 1, selectedId: null, winner: null,
-    message: mission.escort ? 'ナギを選び、橋を渡って灯火台へ向かいましょう。' : '青いユニットを選択してください。',
+    turn: 'blue', turnNumber: 1, selectedId: null, winner: null, holdTurns: 0,
+    message: mission.hold ? '味方を見張り台に置き、敵の行動をしのぎましょう。' : mission.escort ? 'ナギを選び、橋を渡って灯火台へ向かいましょう。' : '青いユニットを選択してください。',
   };
 }
 
 export function battleWinner(state: GameState): Team | null {
-  const escort = chapter(state.chapterId).escort;
+  const { escort, hold } = chapter(state.chapterId);
   if (escort) {
     const traveler = state.units.find(unit => unit.id === escort.id && unit.hp > 0);
     if (!traveler) return 'red';
     return key(traveler) === key(escort.goal) ? 'blue' : null;
   }
-  if (!state.units.some(unit => unit.team === 'red' && unit.hp > 0)) return 'blue';
   if (!state.units.some(unit => unit.team === 'blue' && unit.hp > 0)) return 'red';
+  if (hold) return state.holdTurns >= hold.turns && unitAt(state, hold.point)?.team === 'blue' ? 'blue' : null;
+  if (!state.units.some(unit => unit.team === 'red' && unit.hp > 0)) return 'blue';
   return null;
 }
 
@@ -144,11 +146,11 @@ export function combatForecast(state: GameState, attackerId: string, defenderId:
 }
 
 export function battleProfile(state: GameState, id: string) {
-  return unitProfile(id, state.chapterId === 2 ? state.formation : undefined);
+  return unitProfile(id, state.chapterId !== 1 ? state.formation : undefined);
 }
 
 export function reduceGame(state: GameState, action: Action): GameState {
-  if (action.type === 'restart') return initialState(state.chapterId, state.chapterId === 2 ? state.formation : defaultFormation);
+  if (action.type === 'restart') return initialState(state.chapterId, state.chapterId !== 1 ? state.formation : defaultFormation);
   if (action.type === 'prepare') {
     const formation = readFormation(action.formation);
     return state.chapterId === 1 && state.winner === 'blue' && formation ? { ...state, formation } : state;
@@ -161,6 +163,14 @@ export function reduceGame(state: GameState, action: Action): GameState {
     next.selectedId = null;
     next.units.filter(unit => unit.team === next.turn).forEach(unit => { unit.moved = false; unit.attacked = false; });
     next.message = `${next.turn === 'blue' ? '青' : '赤'}のターンです。ユニットを選択してください。`;
+    const hold = chapter(state.chapterId).hold;
+    if (hold && state.turn === 'red') {
+      next.holdTurns = unitAt(next, hold.point)?.team === 'blue' ? state.holdTurns + 1 : 0;
+      next.winner = battleWinner(next);
+      next.message = next.winner === 'blue' ? '見張り台を守り抜いた。夜明けが来る！'
+        : next.holdTurns ? `見張り台を確保中（${next.holdTurns}/${hold.turns}）。もう一度、敵の行動をしのぎましょう。`
+          : '敵の行動終了時に味方が見張り台にいると防衛が進みます。';
+    }
     return next;
   }
   if (action.type === 'select') {

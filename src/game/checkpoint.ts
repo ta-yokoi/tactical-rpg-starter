@@ -1,11 +1,12 @@
+import { chapter, isChapterId } from './chapters';
 import { defaultFormation, readFormation } from './formation';
 import { battleWinner, initialState, onBoard, terrainAt, type GameState, type Unit } from './rules';
 
 export const checkpointKey = 'tactical-rpg-starter:checkpoint';
 
 export function encodeCheckpoint(state: GameState): string {
-  const { chapterId, formation, units, turn, turnNumber, selectedId, winner, message } = state;
-  return JSON.stringify({ version: 2, chapterId, formation, units, turn, turnNumber, selectedId, winner, message });
+  const { chapterId, formation, units, turn, turnNumber, selectedId, winner, holdTurns, message } = state;
+  return JSON.stringify({ version: 3, chapterId, formation, units, turn, turnNumber, selectedId, winner, holdTurns, message });
 }
 
 type Fields = Record<string, unknown>;
@@ -16,11 +17,16 @@ const integer = (value: unknown): value is number => typeof value === 'number' &
 export function decodeCheckpoint(raw: string): GameState | null {
   try {
     const saved: unknown = JSON.parse(raw);
-    if (!record(saved) || (saved.version !== 1 && saved.version !== 2) || (saved.chapterId !== 1 && saved.chapterId !== 2)) return null;
+    if (!record(saved) || (saved.version !== 1 && saved.version !== 2 && saved.version !== 3) ||
+        !isChapterId(saved.chapterId) || (saved.version !== 3 && saved.chapterId === 3)) return null;
     const formation = saved.version === 1 ? defaultFormation : readFormation(saved.formation);
     if (!formation) return null;
     const state = initialState(saved.chapterId, formation);
     const { units, turn, turnNumber, selectedId, winner, message } = saved;
+    const holdTurns = saved.version === 3 ? saved.holdTurns : 0;
+    const hold = chapter(state.chapterId).hold;
+    if (!integer(holdTurns) || holdTurns < 0 || holdTurns > (hold?.turns ?? 0) ||
+        holdTurns > Math.floor(integer(turnNumber) ? (turnNumber - 1) / 2 : 0)) return null;
     if (!Array.isArray(units) || !integer(turnNumber) || turnNumber < 1 ||
         (turn !== 'blue' && turn !== 'red') || turn !== (turnNumber % 2 ? 'blue' : 'red') ||
         (winner !== null && winner !== 'blue' && winner !== 'red') ||
@@ -38,7 +44,7 @@ export function decodeCheckpoint(raw: string): GameState | null {
       restored.push({ ...base, x, y, hp, moved, attacked });
     }
     if (selectedId !== null && !restored.some(unit => unit.id === selectedId && unit.team === turn)) return null;
-    const checkpoint: GameState = { ...state, units: restored, turn, turnNumber, selectedId: selectedId as string | null, winner, message };
+    const checkpoint: GameState = { ...state, units: restored, turn, turnNumber, selectedId: selectedId as string | null, winner, holdTurns, message };
     return battleWinner(checkpoint) === winner ? checkpoint : null;
   } catch {
     return null;

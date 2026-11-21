@@ -9,8 +9,8 @@ async function tilePosition(page: Page, x: number, y: number): Promise<[number, 
   return [bounds.x + position.x * bounds.width / WIDTH, bounds.y + position.y * bounds.height / HEIGHT];
 }
 
-test('win chapter one, equip and train the party, and play both escort outcomes', async ({ page }, testInfo) => {
-  test.setTimeout(150_000);
+test('play the campaign from chapter one through the ending', async ({ page }, testInfo) => {
+  test.setTimeout(210_000);
   const errors: string[] = [];
   const loadedArt = new Set<string>();
   page.on('response', response => {
@@ -251,6 +251,34 @@ test('win chapter one, equip and train the party, and play both escort outcomes'
     await page.screenshot({ path: testInfo.outputPath('escort-victory.png'), fullPage: true });
     await page.reload();
     await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
+    await page.getByRole('button', { name: /終章へ進む/ }).click();
+    await expect(page.locator('#chapter-label')).toHaveText('終章');
+    await expect(page.locator('#hold-progress')).toHaveText('防衛 0 / 2');
+    await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+    expect((await state()).formation).toEqual(beforeReload.formation);
+    await page.screenshot({ path: testInfo.outputPath('finale-start.png'), fullPage: true });
+    await order('blue-1', 4, 2);
+    await order('blue-2', 3, 4);
+    await enemyPhase();
+    await expect(page.locator('#hold-progress')).toHaveText('防衛 1 / 2');
+    const held = await state();
+    await page.reload();
+    await expect(page.locator('#hold-progress')).toHaveText('防衛 1 / 2');
+    expect(await state()).toEqual(held);
+    await order('blue-2', 3, 4, 'red-2');
+    await order('blue-1', 4, 2, 'red-1');
+    await enemyPhase();
+    await expect(page.getByRole('heading', { name: '見張り台を守り抜いた！' })).toBeVisible();
+    expect(await state()).toMatchObject({ chapterId: 3, holdTurns: 2, winner: 'blue' });
+    await page.reload();
+    await page.getByRole('button', { name: /結末を見る/ }).click();
+    const ending = page.getByRole('dialog', { name: '境界に灯がともる' });
+    await expect(ending).toContainText('全3章クリア');
+    await page.screenshot({ path: testInfo.outputPath('campaign-ending.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(ending).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('campaign-ending-mobile.png') });
+    await ending.getByRole('button', { name: '戦果に戻る' }).click();
     await page.getByRole('button', { name: '第1章から遊ぶ' }).click();
     expect(await state()).toMatchObject({ chapterId: 1, turnNumber: 1, winner: null });
     expect(errors, errors.join('\n')).toEqual([]);

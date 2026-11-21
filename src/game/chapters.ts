@@ -8,6 +8,7 @@ type Chapter = {
   map: readonly string[];
   units: readonly Unit[];
   escort?: { id: string; goal: Point };
+  hold?: { point: Point; turns: number };
 };
 
 function unit(id: string, team: Unit['team'], x: number, y: number, hp: number): Unit {
@@ -39,9 +40,25 @@ export const chapters = {
     ],
     escort: { id: 'blue-escort', goal: { x: 7, y: 3 } },
   },
+  3: {
+    title: '夜明けの火守',
+    district: '暁の見張り台',
+    briefing: 'ナギの灯を合図に、尾根の火を取り戻す。夜が明けるまで見張り台を守れ。',
+    objective: '敵の行動を2回連続でしのぎ、見張り台を守る',
+    map: ['c..#...c', '.##..c..', '====t=..', '.c#..#..', '....==..', 'c....c..'],
+    units: [
+      unit('blue-1', 'blue', 1, 2, 11), unit('blue-2', 'blue', 2, 4, 9),
+      unit('red-1', 'red', 6, 2, 9), unit('red-2', 'red', 7, 4, 8),
+    ],
+    hold: { point: { x: 4, y: 2 }, turns: 2 },
+  },
 } satisfies Record<number, Chapter>;
 
 export type ChapterId = keyof typeof chapters;
+
+export function isChapterId(id: unknown): id is ChapterId {
+  return typeof id === 'number' && Object.hasOwn(chapters, id);
+}
 
 export function chapter(id: ChapterId): Chapter {
   return chapters[id];
@@ -58,6 +75,7 @@ const terrains = {
   '~': { name: '川', frame: 'water' },
   '+': { name: '橋', frame: 'bridge' },
   g: { name: '灯火台', frame: 'beacon' },
+  t: { name: '見張り台', frame: 'watchtower' },
 } as const;
 
 export function chapterTerrain(id: ChapterId, { x, y }: Point) {

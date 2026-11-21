@@ -19,6 +19,7 @@
 body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 65% 3%, #203548, #0e1b29 50%, #0b1420 86%); }
 main { --landscape: url('./art/pass.webp'); max-width: 1264px; margin: 0 auto; padding: 22px 24px 36px; }
 main[data-chapter="2"] { --landscape: url('./art/river.webp'); }
+main[data-chapter="3"] { --landscape: url('./art/watchtower.webp'); }
 .masthead {
   position: relative;
   display: flex;
@@ -526,4 +527,15 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
 @media (prefers-reduced-motion: reduce) {
   .combat-stage .duel-actor[data-pose] canvas, .combat-stage .duel-actor.fallen { animation: none !important; }
   .combat-stage .duel-actor.fallen { opacity: 0; }
+}
+
+.hold-progress { flex: none; margin-left: 4px; padding: 2px 7px; border: 1px solid #947849; background: #554536; color: #fff0bf; font: 750 11px/1.4 system-ui, sans-serif; }
+.ending-dialog { width: min(600px, 94vw); padding: 5px; }
+.ending-art { min-height: 155px; background: var(--landscape) center 53% / cover; border-bottom: 1px solid #bda579; }
+.ending-entry { padding: 14px 18px 18px; }
+.ending-entry .eyebrow { margin: 0 0 5px; }
+.ending-entry p { margin: 9px 0; font-size: 13px; line-height: 1.8; }
+@media (max-width: 480px) {
+  .ending-art { min-height: 100px; }
+  .ending-entry { padding: 11px; }
 }

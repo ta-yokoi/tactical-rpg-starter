@@ -18,7 +18,7 @@
         <div class="chapter-seal" aria-hidden="true"><span id="chapter-number">01</span></div>
       </header>
 
-      <div class="mission-strip"><span class="diamond" aria-hidden="true">◆</span><strong>勝利条件</strong><span id="mission-objective">敵部隊を全滅させる</span><span id="checkpoint-status" class="mission-note" role="status"></span></div>
+      <div class="mission-strip"><span class="diamond" aria-hidden="true">◆</span><strong>勝利条件</strong><span id="mission-objective">敵部隊を全滅させる</span><span id="hold-progress" class="hold-progress" hidden role="status"></span><span id="checkpoint-status" class="mission-note" role="status"></span></div>
       <section class="game-layout" aria-label="戦闘画面">
         <div class="battle-frame">
           <div class="battle-topline"><span id="district">古い峠</span><span id="turn-label">第1ターン ／ 味方フェイズ</span></div>
@@ -37,7 +37,7 @@
             </div>
           </div>
           <div id="outcome" class="outcome" hidden>
-            <div class="outcome-card"><span id="outcome-mark" class="outcome-mark" aria-hidden="true">◆</span><h2 id="outcome-heading"></h2><p id="outcome-copy"></p><button id="next-chapter" type="button" hidden>編成へ進む →</button><button id="restart-outcome" type="button">もう一度戦う ↻</button><button id="replay-campaign" type="button" hidden>第1章から遊ぶ</button></div>
+            <div class="outcome-card"><span id="outcome-mark" class="outcome-mark" aria-hidden="true">◆</span><h2 id="outcome-heading"></h2><p id="outcome-copy"></p><button id="next-chapter" type="button" hidden>編成へ進む →</button><button id="show-ending" type="button" hidden>結末を見る →</button><button id="restart-outcome" type="button">もう一度戦う ↻</button><button id="replay-campaign" type="button" hidden>第1章から遊ぶ</button></div>
           </div>
           </div>
           <div class="battle-bottomline"><output id="tile-detail" aria-live="polite">青の味方を選択</output><div id="terrain-chip" hidden><canvas width="20" height="20" aria-hidden="true"></canvas><span></span></div></div>
@@ -53,9 +53,20 @@
           <div class="combat-log"><span class="panel-label">直近の交戦</span><p id="combat-log" aria-live="polite"></p></div>
           <div class="roster-section"><span class="panel-label">味方部隊</span><div id="roster"></div></div>
           <div class="toolbar"><button id="sound-toggle" type="button" aria-pressed="true">♪ 音声 ON</button><button id="restart" type="button">↻ この章をやり直す</button></div>
-          <details class="legend"><summary>操作と地形</summary><p><span class="swatch move"></span>青いマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p id="board-controls">クリック・タップでマスを選択。キーボードでは矢印で照準、Enterで決定。</p><p id="escort-help" hidden>ナギは毎ターン2マスまで移動でき、攻撃・反撃はできません。川は橋から渡ります。</p><p>低木では被ダメージが1減ります。石垣は通行と術を遮ります。敵はターン終了後に自動で動きます。</p></details>
+          <details class="legend"><summary>操作と地形</summary><p><span class="swatch move"></span>青いマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p id="board-controls">クリック・タップでマスを選択。キーボードでは矢印で照準、Enterで決定。</p><p id="escort-help" hidden>ナギは毎ターン2マスまで移動でき、攻撃・反撃はできません。川は橋から渡ります。</p><p id="hold-help" hidden>見張り台では被ダメージが1減ります。敵ターンの終了時に味方がいれば防衛が1回進みます。誰も守っていない状態で敵ターンが終わると、連続回数は0に戻ります。</p><p>低木では被ダメージが1減ります。石垣は通行と術を遮ります。敵はターン終了後に自動で動きます。</p></details>
         </aside>
       </section>
+      <dialog id="ending-dialog" class="attack-dialog ending-dialog" aria-labelledby="ending-heading">
+        <div class="ending-art"></div>
+        <div class="ending-entry">
+          <p class="eyebrow">全3章クリア</p>
+          <h2 id="ending-heading">境界に灯がともる</h2>
+          <p>尾根の火を見て、ナギも川辺の灯を掲げた。二つの明かりは夜の底で応え合い、旅人たちに帰り道を知らせた。</p>
+          <p>「これで、朝の舟を出せるな」</p>
+          <p>アステルが剣を収めると、リナは朝の光へ杖をかざした。峠を越えてきた人々の足音が、静かな渡し場に戻ってきた。</p>
+          <form method="dialog"><button value="cancel">戦果に戻る</button></form>
+        </div>
+      </dialog>
       <dialog id="formation-dialog" class="attack-dialog formation-dialog" aria-labelledby="formation-heading">
         <header><p class="eyebrow">第2章　渡し守の灯</p><h2 id="formation-heading">出撃前の編成</h2>
           <p>装備と訓練を選び、ナギを護衛する準備を整えます。</p></header>
