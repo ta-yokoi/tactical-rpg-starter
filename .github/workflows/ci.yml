@@ -40,6 +40,14 @@ jobs:
       - run: npm run test:e2e
         env:
           GITHUB_PAGES: 'true'
+      - name: Check title and saved progress in Firefox and WebKit
+        env:
+          GITHUB_PAGES: 'true'
+        run: |
+          npx playwright install --with-deps firefox webkit
+          for browser in firefox webkit; do
+            npm run test:e2e -- --browser="$browser" --grep 'title screen restores' --reporter=list --output="browser-compat-results/$browser"
+          done
       - name: Save browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,6 +56,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            browser-compat-results/
           if-no-files-found: ignore
       - name: Configure Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

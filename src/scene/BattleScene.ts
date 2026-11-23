@@ -39,6 +39,9 @@ export class BattleScene extends Phaser.Scene {
   private lastHit = '';
   private combatStage!: CombatStage;
   private readonly attackDialog = document.querySelector<HTMLDialogElement>('#attack-dialog')!;
+  private readonly titleDialog = document.querySelector<HTMLDialogElement>('#title-dialog')!;
+  private hasCheckpoint = false;
+  private hasProgress = false;
   private pendingTarget: string | null = null;
   private bannerTimer?: number;
 
@@ -48,12 +51,12 @@ export class BattleScene extends Phaser.Scene {
     createPixelArt(this);
     this.combatStage = new CombatStage(ms => this.pause(ms));
     this.battlefield = this.add.layer().setDepth(-2);
-    let resumed = false;
     try {
       const checkpoint = loadCheckpoint(window.localStorage);
       if (checkpoint) {
         this.state = checkpoint;
-        resumed = true;
+        this.hasCheckpoint = true;
+        this.hasProgress = true;
       }
     } catch {
       element('checkpoint-status').textContent = 'このブラウザでは保存できません';
@@ -98,12 +101,41 @@ export class BattleScene extends Phaser.Scene {
       if (canPrepare()) formationDialog.open(this.state.formation);
       else if (!this.busy && this.state.chapterId === 2 && this.state.winner === 'blue') this.startChapter(3);
     });
+    const endingDialog = document.querySelector<HTMLDialogElement>('#ending-dialog')!;
     button('show-ending').addEventListener('click', () => {
       if (!this.busy && this.state.chapterId === 3 && this.state.winner === 'blue') {
-        document.querySelector<HTMLDialogElement>('#ending-dialog')!.showModal();
+        endingDialog.returnValue = '';
+        endingDialog.showModal();
       }
     });
-    button('replay-campaign').addEventListener('click', () => this.startChapter(1));
+    endingDialog.addEventListener('close', () => {
+      if (endingDialog.returnValue === 'title') this.openTitle();
+    });
+    this.titleDialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      if (!element('new-game-confirmation').hidden) this.showNewGameConfirmation(false);
+    });
+    button('return-title').addEventListener('click', () => this.openTitle());
+    button('new-game').addEventListener('click', () => {
+      if (this.hasProgress) this.showNewGameConfirmation(true);
+      else this.beginCampaign();
+    });
+    button('cancel-new-game').addEventListener('click', () => this.showNewGameConfirmation(false));
+    button('confirm-new-game').addEventListener('click', () => this.beginCampaign());
+    button('continue-game').addEventListener('click', () => {
+      this.titleDialog.close();
+      this.soundKit.start();
+      if (this.hasCheckpoint) element('checkpoint-status').textContent = '前回の続きから再開しました';
+      if (this.state.winner) this.focusOutcome();
+      else {
+        this.showChapterBanner();
+        board.focus({ preventScroll: true });
+      }
+    });
+    button('replay-campaign').addEventListener('click', () => {
+      this.openTitle();
+      this.showNewGameConfirmation(true);
+    });
     button('sound-toggle').addEventListener('click', () => {
       this.soundKit.toggle();
       button('sound-toggle').setAttribute('aria-pressed', String(this.soundKit.isEnabled));
@@ -113,9 +145,37 @@ export class BattleScene extends Phaser.Scene {
     this.resetUnits();
     this.drawChapterLabels();
     this.drawUi();
-    if (resumed) element('checkpoint-status').textContent = '前回の続きから再開しました';
-    if (!this.state.winner) this.showChapterBanner();
-    else this.focusOutcome();
+    this.openTitle();
+  }
+
+  private openTitle(): void {
+    if (this.busy || this.titleDialog.open) return;
+    this.soundKit.stop();
+    const resume = button('continue-game');
+    resume.disabled = !this.hasProgress;
+    const mission = chapter(this.state.chapterId);
+    const cleared = this.state.chapterId === 3 && this.state.winner === 'blue';
+    const number = this.state.chapterId === 3 ? '終章' : `第${this.state.chapterId}章`;
+    element('title-checkpoint').textContent = this.hasProgress
+      ? cleared ? '全3章クリア · エンディングを再読できます' : `${number} · ${mission.title}`
+      : '保存データはありません';
+    element('title-options').hidden = false;
+    element('new-game-confirmation').hidden = true;
+    this.titleDialog.showModal();
+    (resume.disabled ? button('new-game') : resume).focus();
+  }
+
+  private showNewGameConfirmation(show: boolean): void {
+    element('title-options').hidden = show;
+    element('new-game-confirmation').hidden = !show;
+    button(show ? 'cancel-new-game' : 'new-game').focus();
+  }
+
+  private beginCampaign(): void {
+    this.titleDialog.close();
+    this.hasProgress = true;
+    (element('field-guide') as HTMLDetailsElement).open = true;
+    this.startChapter(1);
   }
 
   private drawTerrain(): void {
@@ -149,7 +209,7 @@ export class BattleScene extends Phaser.Scene {
     const offset = arrows[event.key];
     if (!offset && event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    if (this.busy || this.state.winner) return;
+    if (this.titleDialog.open || this.busy || this.state.winner) return;
     if (!this.cursor) {
       this.setCursor(this.state.units.find(unit => unit.id === this.state.selectedId) ??
         this.state.units.find(unit => unit.team === 'blue') ?? { x: 0, y: 0 });
@@ -219,7 +279,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async playerTile(point: Point): Promise<void> {
-    if (this.busy || this.state.turn !== 'blue' || this.state.winner) return;
+    if (this.titleDialog.open || this.busy || this.state.turn !== 'blue' || this.state.winner) return;
     this.soundKit.start();
     const target = this.state.units.find(unit => unit.team === 'red' && same(unit, point));
     const source = this.state.units.find(unit => unit.id === this.state.selectedId);
@@ -294,8 +354,10 @@ export class BattleScene extends Phaser.Scene {
   private checkpoint(): void {
     try {
       saveCheckpoint(window.localStorage, this.state);
+      this.hasCheckpoint = true;
       element('checkpoint-status').textContent = 'この端末に自動保存済み';
     } catch {
+      this.hasCheckpoint = false;
       element('checkpoint-status').textContent = 'このブラウザでは保存できません';
     }
   }
@@ -344,6 +406,7 @@ export class BattleScene extends Phaser.Scene {
     const objective = chapter(this.state.chapterId).hold;
     if (objective && !this.state.winner) this.markCorners(this.marks, center(objective.point), 9, 0xffd785);
     const selected = this.state.units.find(unit => unit.id === this.state.selectedId);
+    let canAttack = false;
     if (selected && !this.state.winner) {
       const player = !this.busy && this.state.turn === 'blue';
       for (const point of player ? movementRange(this.state, selected.id) : []) {
@@ -356,6 +419,7 @@ export class BattleScene extends Phaser.Scene {
         const { x, y } = center(point);
         const target = this.state.units.some(unit => unit.team === 'red' && same(unit, point));
         if (target) {
+          canAttack = true;
           this.marks.fillStyle(0xe57245, .19).fillRect(x - 9, y - 9, 18, 18);
           this.markCorners(this.marks, { x, y }, 8, 0xffb47b);
         } else {
@@ -365,6 +429,7 @@ export class BattleScene extends Phaser.Scene {
       const { x, y } = center(selected);
       this.marks.lineStyle(1, 0xffe295).strokeRect(x - 9, y - 9, 18, 18);
     }
+    if (!this.busy || this.state.turn === 'red') this.drawFieldGuide(selected, canAttack);
     this.drawCursor();
     const phase = this.state.turn === 'blue' ? '味方フェイズ' : '敵フェイズ';
     document.querySelector<HTMLElement>('.battle-frame')!.dataset.turn = this.state.turn;
@@ -405,6 +470,7 @@ export class BattleScene extends Phaser.Scene {
     }));
     button('end-turn').disabled = this.busy || this.state.turn !== 'blue' || this.state.winner !== null;
     button('restart').disabled = this.busy;
+    button('return-title').disabled = this.busy;
     const finished = !this.busy && this.state.winner !== null;
     const won = finished && this.state.winner === 'blue';
     const { escort, hold } = chapter(this.state.chapterId);
@@ -431,6 +497,21 @@ export class BattleScene extends Phaser.Scene {
         ? hold ? '尾根の火が夜明けを告げた。' : escort ? 'ナギが灯火台に到着した。尾根の見張り台へ向かおう。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
         : escort ? 'ナギを守りきれなかった。' : 'もう一度、陣形を整えて挑もう。';
     }
+  }
+
+  private drawFieldGuide(selected: Unit | undefined, canAttack: boolean): void {
+    const guide = element('field-guide');
+    guide.hidden = this.state.chapterId !== 1 || this.state.winner !== null;
+    if (guide.hidden) return;
+    const hint = element('field-hint');
+    const text = this.state.turn === 'red' ? '敵フェイズ中は、敵の移動と攻撃を見守ります。'
+      : this.state.units.filter(unit => unit.team === 'blue').every(unit => unit.attacked) ? '味方は行動済みです。「行動を終える」で敵フェイズへ進みます。'
+      : !selected ? '青い味方を選びます。マスはクリック・タップ、または矢印キーと Enter で操作できます。'
+      : selected.attacked ? 'この味方は行動済みです。別の味方を選ぶか、「行動を終える」を押します。'
+      : canAttack ? '橙の枠が付いた敵を選ぶと、与えるダメージと敵の反撃を確認できます。'
+      : selected.moved ? '攻撃できる敵がいません。別の味方を選ぶか、「行動を終える」を押します。'
+      : '青く光るマスを選ぶと移動します。低木に入ると受けるダメージが1減ります。';
+    if (hint.textContent !== text) hint.textContent = text;
   }
 
   private async present(next: GameState): Promise<void> {

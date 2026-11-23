@@ -9,6 +9,15 @@ async function tilePosition(page: Page, x: number, y: number): Promise<[number, 
   return [bounds.x + position.x * bounds.width / WIDTH, bounds.y + position.y * bounds.height / HEIGHT];
 }
 
+const titleMenu = (page: Page) => page.getByRole('dialog', { name: '蒼の境界' });
+const newGame = (page: Page) => titleMenu(page).getByRole('button', { name: 'はじめから' });
+const continueGame = (page: Page) => titleMenu(page).getByRole('button', { name: '続きから' });
+
+async function reloadCampaign(page: Page): Promise<void> {
+  await page.reload();
+  await continueGame(page).click();
+}
+
 test('play the campaign from chapter one through the ending', async ({ page }, testInfo) => {
   test.setTimeout(210_000);
   const errors: string[] = [];
@@ -37,13 +46,18 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
   };
   try {
     await page.goto('./');
+    await expect(continueGame(page)).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('title-start.png') });
+    await newGame(page).click();
     await expect.poll(async () => (await state()).turn).toBe('blue');
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
     await expect.poll(() => Array.from(loadedArt).some(path => /pass[^/]*\.webp$/.test(path))).toBe(true);
     const endTurn = (await page.locator('#end-turn').boundingBox())!;
     expect(endTurn.y + endTurn.height).toBeLessThanOrEqual(page.viewportSize()!.height);
     await page.screenshot({ path: testInfo.outputPath('battle-start.png'), fullPage: true });
+    await expect(page.locator('#field-hint')).toContainText('青い味方');
     await tile(1, 4);
+    await expect(page.locator('#field-hint')).toContainText('青く光るマス');
     const portraitAsset = Array.from(loadedArt).find(path => /portraits[^/]*\.webp$/.test(path));
     expect(portraitAsset).toBeDefined();
     const portraitMatchesAtlas = await page.locator('#selected-portrait').evaluate(async (canvas, path) => {
@@ -149,7 +163,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     expect((await state()).winner).toBe('blue');
     await expect(page.getByRole('heading', { name: '戦いに勝利！' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('battle-victory.png'), fullPage: true });
-    await page.reload();
+    await reloadCampaign(page);
     const openFormation = page.getByRole('button', { name: /編成へ進む/ });
     const formationDialog = page.getByRole('dialog', { name: '出撃前の編成' });
     await expect(openFormation).toBeVisible();
@@ -169,7 +183,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await page.screenshot({ path: testInfo.outputPath('formation.png'), fullPage: true });
     await formationDialog.getByRole('button', { name: '戦果に戻る' }).click();
     expect((await state()).chapterId).toBe(1);
-    await page.reload();
+    await reloadCampaign(page);
     await openFormation.click();
     await expect(vitality).toBeChecked();
     await expect(formationDialog.getByRole('radio', { name: /灯守の盾/ })).toBeChecked();
@@ -231,7 +245,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await order('blue-2', 4, 5);
     await order('blue-escort', 1, 3);
     const beforeReload = await state();
-    await page.reload();
+    await reloadCampaign(page);
     await expect(page.locator('#checkpoint-status')).toContainText('前回の続き');
     expect(await state()).toEqual(beforeReload);
     await expect(page.locator('#selected-stats')).toContainText('攻撃不可');
@@ -249,7 +263,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
     expect((await state()).winner).toBe('blue');
     await page.screenshot({ path: testInfo.outputPath('escort-victory.png'), fullPage: true });
-    await page.reload();
+    await reloadCampaign(page);
     await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
     await page.getByRole('button', { name: /終章へ進む/ }).click();
     await expect(page.locator('#chapter-label')).toHaveText('終章');
@@ -262,7 +276,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await enemyPhase();
     await expect(page.locator('#hold-progress')).toHaveText('防衛 1 / 2');
     const held = await state();
-    await page.reload();
+    await reloadCampaign(page);
     await expect(page.locator('#hold-progress')).toHaveText('防衛 1 / 2');
     expect(await state()).toEqual(held);
     await order('blue-2', 3, 4, 'red-2');
@@ -270,7 +284,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await enemyPhase();
     await expect(page.getByRole('heading', { name: '見張り台を守り抜いた！' })).toBeVisible();
     expect(await state()).toMatchObject({ chapterId: 3, holdTurns: 2, winner: 'blue' });
-    await page.reload();
+    await reloadCampaign(page);
     await page.getByRole('button', { name: /結末を見る/ }).click();
     const ending = page.getByRole('dialog', { name: '境界に灯がともる' });
     await expect(ending).toContainText('全3章クリア');
@@ -278,8 +292,12 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(ending).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('campaign-ending-mobile.png') });
-    await ending.getByRole('button', { name: '戦果に戻る' }).click();
+    await ending.getByRole('button', { name: 'タイトルへ' }).click();
+    await expect(titleMenu(page)).toContainText('全3章クリア');
+    await continueGame(page).click();
+    await expect(page.getByRole('button', { name: /結末を見る/ })).toBeFocused();
     await page.getByRole('button', { name: '第1章から遊ぶ' }).click();
+    await titleMenu(page).getByRole('button', { name: '第1章から始める' }).click();
     expect(await state()).toMatchObject({ chapterId: 1, turnNumber: 1, winner: null });
     expect(errors, errors.join('\n')).toEqual([]);
   } finally {
@@ -317,6 +335,9 @@ test.describe('touch screen', () => {
       expect(assetPaths.every(path => path.startsWith(`/${base}/assets/`))).toBe(true);
     }
     await expect.poll(() => page.evaluate(() => Boolean(window.__GAME_TEST__))).toBe(true);
+    await expect(newGame(page)).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('title-mobile.png') });
+    await newGame(page).tap();
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
     const scale = () => page.locator('#game canvas').evaluate((canvas: HTMLCanvasElement) => {
       const bounds = canvas.getBoundingClientRect();
@@ -342,6 +363,7 @@ test.describe('touch screen', () => {
     await page.touchscreen.tap(...await tilePosition(page, 1, 4));
     await page.touchscreen.tap(...await tilePosition(page, 4, 4));
     await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
+    await expect(page.locator('#field-hint')).toContainText('橙の枠');
     await page.touchscreen.tap(...await tilePosition(page, 6, 4));
     const forecast = page.getByRole('dialog', { name: '戦闘予告' });
     await expect(forecast).toContainText('反撃');
@@ -355,19 +377,38 @@ test.describe('touch screen', () => {
   });
 });
 
-test('keyboard commands work and waiting through enemy turns leads to defeat', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+test('title screen restores a saved move and protects it from a cancelled restart', async ({ page }) => {
   const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
   await page.goto('./');
   const board = page.locator('#game');
-  await expect(board.locator('canvas')).toBeVisible();
-  await board.focus();
+  await expect(continueGame(page)).toBeDisabled();
+  await expect(newGame(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(board).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await getState()).selectedId).toBe('blue-1');
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('#tile-detail')).toContainText('移動 1マス');
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await getState()).units[0].x).toBe(2);
+  await expect(page.locator('#end-turn')).toBeEnabled();
+  const beforeTitle = await getState();
+  await page.getByRole('button', { name: 'タイトルへ' }).click();
+  await expect(continueGame(page)).toBeFocused();
+  await newGame(page).click();
+  await expect(titleMenu(page).getByRole('button', { name: '戻る' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(newGame(page)).toBeFocused();
+  await reloadCampaign(page);
+  await expect(board).toBeFocused();
+  expect(await getState()).toEqual(beforeTitle);
+});
+
+test('waiting through enemy turns leads to defeat', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
+  await page.goto('./');
+  await newGame(page).click();
   await expect(page.locator('#end-turn')).toBeEnabled();
   for (let round = 1; round <= 9; round++) {
     await page.locator('#end-turn').click();
@@ -391,5 +432,5 @@ test('keyboard commands work and waiting through enemy turns leads to defeat', a
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await getState()).turnNumber).toBe(1);
   expect((await getState()).units).toHaveLength(4);
-  await expect(board).toBeFocused();
+  await expect(page.locator('#game')).toBeFocused();
 });

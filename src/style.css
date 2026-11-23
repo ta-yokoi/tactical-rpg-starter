@@ -539,3 +539,27 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
   .ending-art { min-height: 100px; }
   .ending-entry { padding: 11px; }
 }
+
+.title-dialog { width: min(600px, 94vw); padding: 5px; }
+.title-dialog::backdrop { background: #0d182c; }
+.title-landscape {
+  display: grid;
+  align-content: end;
+  min-height: clamp(158px, 40dvh, 302px);
+  padding: 22px clamp(13px, 5vw, 32px);
+  border: 1px solid #ab9466;
+  background: linear-gradient(0deg, #091425ed, #0d182449 66%, transparent), url('./art/pass.webp') 55% 52% / cover;
+}
+.title-landscape h2 { margin: 0 0 5px; color: #ffedc2; font-size: clamp(32px, 8vw, 57px); letter-spacing: .1em; text-shadow: 2px 3px #0c1728; }
+.title-landscape p { margin: 0; color: #f2e5cb; font-size: 13px; }
+.title-menu { width: min(100%, 340px); min-height: 154px; margin: 0 auto; padding: 14px 10px 12px; }
+.title-menu p { margin: 6px 0 10px; color: #e6dcbe; font-size: 12px; line-height: 1.55; }
+.title-menu button { display: block; width: 100%; min-height: 44px; font-size: 14px; text-align: center; }
+.title-secondary { border: 1px solid #8197ae; background: #1c2e4c; color: #f4f1dc; }
+.title-secondary:hover { background: #304c73; }
+.title-menu button:disabled { border-color: #617694; background: #192946; color: #d4dce7; }
+.title-menu:has(#continue-game:disabled) #new-game { border-color: #dbbc7f; background: linear-gradient(#efdaa9, #d1aa69); color: #202734; font-weight: 800; }
+.title-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px; }
+.field-guide { margin-top: 8px; padding: 6px 9px; border: 1px solid #71839a; background: #192c48; color: #e8eef5; font-size: 12px; line-height: 1.55; }
+.field-guide summary { width: fit-content; color: #f5dba1; font-weight: 750; cursor: pointer; }
+.field-guide p { margin: 3px 0 0; }

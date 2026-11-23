@@ -19,13 +19,15 @@ export class Chiptune {
     if (this.output) this.output.gain.value = Number(this.enabled);
     if (this.enabled) {
       this.start();
-    } else {
-      if (this.timer !== null) window.clearInterval(this.timer);
-      this.timer = null;
-      for (const id of this.pending) window.clearTimeout(id);
-      this.pending.clear();
-    }
+    } else this.stop();
     return this.enabled;
+  }
+
+  stop(): void {
+    if (this.timer !== null) window.clearInterval(this.timer);
+    this.timer = null;
+    for (const id of this.pending) window.clearTimeout(id);
+    this.pending.clear();
   }
 
   start(): void {
