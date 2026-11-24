@@ -386,7 +386,8 @@ export class BattleScene extends Phaser.Scene {
     element('seal-title').textContent = mission.title;
     element('briefing').textContent = mission.briefing;
     element('district').textContent = mission.district;
-    element('mission-objective').textContent = mission.objective;
+    element('mission-objective').textContent = mission.hold
+      ? `${mission.objective}（敵フェイズを${this.state.holdGoal}回連続で防衛）` : mission.objective;
     element('escort-help').hidden = !mission.escort;
     element('hold-help').hidden = !mission.hold;
   }
@@ -404,7 +405,6 @@ export class BattleScene extends Phaser.Scene {
   private drawUi(): void {
     this.marks.clear();
     const objective = chapter(this.state.chapterId).hold;
-    if (objective && !this.state.winner) this.markCorners(this.marks, center(objective.point), 9, 0xffd785);
     const selected = this.state.units.find(unit => unit.id === this.state.selectedId);
     let canAttack = false;
     if (selected && !this.state.winner) {
@@ -429,6 +429,7 @@ export class BattleScene extends Phaser.Scene {
       const { x, y } = center(selected);
       this.marks.lineStyle(1, 0xffe295).strokeRect(x - 9, y - 9, 18, 18);
     }
+    this.drawHoldStatus(objective?.point);
     if (!this.busy || this.state.turn === 'red') this.drawFieldGuide(selected, canAttack);
     this.drawCursor();
     const phase = this.state.turn === 'blue' ? '味方フェイズ' : '敵フェイズ';
@@ -474,10 +475,6 @@ export class BattleScene extends Phaser.Scene {
     const finished = !this.busy && this.state.winner !== null;
     const won = finished && this.state.winner === 'blue';
     const { escort, hold } = chapter(this.state.chapterId);
-    const progress = element('hold-progress');
-    progress.hidden = !hold;
-    if (hold) progress.textContent = `防衛 ${this.state.holdTurns} / ${hold.turns}`;
-
     element('outcome').hidden = !finished;
     const next = button('next-chapter');
     next.hidden = !won || Boolean(hold);
@@ -497,6 +494,21 @@ export class BattleScene extends Phaser.Scene {
         ? hold ? '尾根の火が夜明けを告げた。' : escort ? 'ナギが灯火台に到着した。尾根の見張り台へ向かおう。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
         : escort ? 'ナギを守りきれなかった。' : 'もう一度、陣形を整えて挑もう。';
     }
+  }
+
+  private drawHoldStatus(point: Point | undefined): void {
+    const progress = element('hold-progress');
+    const status = element('hold-status');
+    progress.hidden = status.hidden = !point;
+    if (!point) return;
+    const guard = this.state.units.find(unit => same(unit, point));
+    const text = `防衛 ${this.state.holdTurns} / ${this.state.holdGoal}`;
+    if (progress.textContent !== text) progress.textContent = text;
+    status.dataset.control = guard?.team ?? 'empty';
+    status.textContent = guard ? `見張り台 · ${unitProfile(guard.id).name}` : '見張り台 · 無人';
+    if (this.state.winner) return;
+    const color = guard?.team === 'blue' ? 0x94eded : guard?.team === 'red' ? 0xff997e : 0xffd785;
+    this.markCorners(this.marks, center(point), 9, color);
   }
 
   private drawFieldGuide(selected: Unit | undefined, canAttack: boolean): void {

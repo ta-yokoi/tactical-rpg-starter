@@ -530,6 +530,9 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
 }
 
 .hold-progress { flex: none; margin-left: 4px; padding: 2px 7px; border: 1px solid #947849; background: #554536; color: #fff0bf; font: 750 11px/1.4 system-ui, sans-serif; }
+.hold-status { flex: none; padding: 2px 7px; border: 1px solid #938460; background: #f3e1bb; color: #443523; font-size: 11px; }
+.hold-status[data-control="blue"] { border-color: #51787b; background: #dbebe2; color: #18444d; }
+.hold-status[data-control="red"] { border-color: #a05d52; background: #f8d4c4; color: #6e332b; }
 .ending-dialog { width: min(600px, 94vw); padding: 5px; }
 .ending-art { min-height: 155px; background: var(--landscape) center 53% / cover; border-bottom: 1px solid #bda579; }
 .ending-entry { padding: 14px 18px 18px; }

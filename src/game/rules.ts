@@ -17,6 +17,7 @@ export type GameState = {
   selectedId: string | null;
   winner: Team | null;
   holdTurns: number;
+  holdGoal: number;
   message: string;
 };
 export type Action = { type: 'select'; id: string } | { type: 'move'; x: number; y: number } |
@@ -47,7 +48,7 @@ export function initialState(chapterId: ChapterId = 1, formation: Formation = de
       const hp = unit.maxHp + (chapterId !== 1 ? formationBonuses(unit.id, formation).hp : 0);
       return { ...unit, hp, maxHp: hp };
     }),
-    turn: 'blue', turnNumber: 1, selectedId: null, winner: null, holdTurns: 0,
+    turn: 'blue', turnNumber: 1, selectedId: null, winner: null, holdTurns: 0, holdGoal: mission.hold?.turns ?? 0,
     message: mission.hold ? '味方を見張り台に置き、敵の行動をしのぎましょう。' : mission.escort ? 'ナギを選び、橋を渡って灯火台へ向かいましょう。' : '青いユニットを選択してください。',
   };
 }
@@ -60,7 +61,7 @@ export function battleWinner(state: GameState): Team | null {
     return key(traveler) === key(escort.goal) ? 'blue' : null;
   }
   if (!state.units.some(unit => unit.team === 'blue' && unit.hp > 0)) return 'red';
-  if (hold) return state.holdTurns >= hold.turns && unitAt(state, hold.point)?.team === 'blue' ? 'blue' : null;
+  if (hold) return state.holdTurns >= state.holdGoal && unitAt(state, hold.point)?.team === 'blue' ? 'blue' : null;
   if (!state.units.some(unit => unit.team === 'red' && unit.hp > 0)) return 'blue';
   return null;
 }
@@ -168,7 +169,7 @@ export function reduceGame(state: GameState, action: Action): GameState {
       next.holdTurns = unitAt(next, hold.point)?.team === 'blue' ? state.holdTurns + 1 : 0;
       next.winner = battleWinner(next);
       next.message = next.winner === 'blue' ? '見張り台を守り抜いた。夜明けが来る！'
-        : next.holdTurns ? `見張り台を確保中（${next.holdTurns}/${hold.turns}）。もう一度、敵の行動をしのぎましょう。`
+        : next.holdTurns ? `見張り台を確保中（${next.holdTurns}/${next.holdGoal}）。次の敵フェイズに備えましょう。`
           : '敵の行動終了時に味方が見張り台にいると防衛が進みます。';
     }
     return next;
