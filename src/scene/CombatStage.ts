@@ -22,7 +22,10 @@ export class CombatStage {
   private readonly backgrounds = new Map<ArenaGround, string>();
   private fighters: Fighter[] = [];
 
-  constructor(private readonly pause: (ms: number) => Promise<void>) {}
+  constructor(
+    private readonly pause: (ms: number) => Promise<void>,
+    private readonly reduceMotion: MediaQueryList,
+  ) {}
 
   open(first: Unit, second: Unit, ground: ArenaGround, gear: (unit: Unit) => string): void {
     const landscape = this.backgrounds.get(ground) ?? combatBackdrop(ground);
@@ -58,16 +61,18 @@ export class CombatStage {
     const motion = style === 'spell' ? 'spell' : strike.attackerId === 'red-1' ? 'axe' : 'sword';
     for (const fighter of this.fighters) {
       fighter.actor.querySelector('.duel-damage')!.textContent = '';
-      this.drawPose(fighter, fighter === attacker ? 'windup' : 'guard');
     }
     const side = this.fighters[0] === attacker ? 'left' : 'right';
     this.stage.className = 'combat-stage';
     this.stage.dataset.motion = motion;
     this.stage.dataset.caster = strike.attackerId;
     this.stage.style.setProperty('--anticipation', `${anticipation[motion].reduce((sum, ms) => sum + ms, 0)}ms`);
-    void this.stage.offsetWidth;
     this.stage.classList.add(side, style, 'windup');
     this.label.textContent = counter ? '反撃' : '先制攻撃';
+    if (this.reduceMotion.matches) return;
+    for (const fighter of this.fighters) {
+      if (fighter !== attacker) this.drawPose(fighter, 'guard');
+    }
     for (const [index, pose] of poses.entries()) {
       this.drawPose(attacker, pose);
       await this.pause(anticipation[motion][index]);
@@ -86,6 +91,10 @@ export class CombatStage {
   }
 
   async recover(strike: Strike): Promise<void> {
+    if (this.reduceMotion.matches) {
+      await this.pause(duelTiming.impact);
+      return;
+    }
     await this.pause(151);
     this.drawPose(this.find(strike.attackerId), 'recover');
     if (strike.remainingHp > 0) this.drawPose(this.find(strike.defenderId), 'guard');

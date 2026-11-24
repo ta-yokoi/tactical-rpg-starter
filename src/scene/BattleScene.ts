@@ -50,7 +50,7 @@ export class BattleScene extends Phaser.Scene {
 
   create(): void {
     createPixelArt(this);
-    this.combatStage = new CombatStage(ms => this.pause(ms));
+    this.combatStage = new CombatStage(ms => this.pause(ms), this.reduceMotion);
     this.battlefield = this.add.layer().setDepth(-2);
     try {
       const checkpoint = loadCheckpoint(window.localStorage);
@@ -571,11 +571,11 @@ export class BattleScene extends Phaser.Scene {
         : terrain.some(tile => ['horizontal', 'north', 'south', 'vertical'].includes(tile)) ? 'road' : 'meadow';
       this.combatStage.open(source, hit, ground, unit => this.combatGear(unit));
       this.drawUi();
-      await this.pause(duelTiming.enter);
+      if (!this.reduceMotion.matches) await this.pause(duelTiming.enter);
       await this.showHit(source, hit, forecast.opening, false);
       if (forecast.counter) await this.showHit(hit, source, forecast.counter, true);
       this.combatStage.exit();
-      await this.pause(duelTiming.exit);
+      if (!this.reduceMotion.matches) await this.pause(duelTiming.exit);
       this.combatStage.close();
     }
     this.state = next;
@@ -591,9 +591,11 @@ export class BattleScene extends Phaser.Scene {
         const walk = `${source.id}-${facing}-walk`;
         view.facing = facing;
         sprite.setFlipX(horizontal && position.x < body.x);
-        if (this.reduceMotion.matches) sprite.setFrame(`${source.id}-${facing}-idle`);
-        else sprite.play(walk, true);
-        await this.tween(body, { ...position, duration: 116, ease: 'Sine.easeInOut' });
+        if (this.reduceMotion.matches) body.setPosition(position.x, position.y);
+        else {
+          sprite.play(walk, true);
+          await this.tween(body, { ...position, duration: 116, ease: 'Sine.easeInOut' });
+        }
       }
       sprite.stop();
     } else if (!hit) {
@@ -618,14 +620,14 @@ export class BattleScene extends Phaser.Scene {
     const { damage, remainingHp } = strike;
     this.combatStage.impact(strike);
     this.lastHit = `${unitProfile(source.id).name}の${counter ? '反撃' : strikeName(source)} → ${unitProfile(target.id).name} −${damage}${remainingHp ? '' : '（撃破）'}`;
-    this.drawUi();
+    element('combat-log').textContent = this.lastHit;
     this.soundKit.play('hurt');
     const victim = this.views.get(target.id)!;
     this.updateHealth(victim, { ...target, hp: remainingHp });
     await this.combatStage.recover(strike);
     if (remainingHp === 0) {
       this.combatStage.fall(target.id);
-      await this.pause(160);
+      if (!this.reduceMotion.matches) await this.pause(160);
       victim.body.destroy();
       this.views.delete(target.id);
     }

@@ -429,6 +429,37 @@ test.describe('touch screen', () => {
   });
 });
 
+test('reduced motion keeps both hits and HP readable', async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./');
+  await newGame(page).click();
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+  const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
+  await page.mouse.click(...await tilePosition(page, 1, 4));
+  await expect.poll(async () => (await getState()).selectedId).toBe('blue-2');
+  await page.mouse.click(...await tilePosition(page, 4, 4));
+  await expect(page.locator('#end-turn')).toBeEnabled();
+  await page.mouse.click(...await tilePosition(page, 6, 4));
+  const forecast = page.getByRole('dialog', { name: '戦闘予告' });
+  await forecast.getByRole('button', { name: '攻撃する' }).click();
+  const stage = page.locator('#combat-stage');
+  const label = stage.locator('#stage-label');
+  await expect(label).toHaveText('先制攻撃　−3');
+  await expect(stage).toHaveCSS('animation-name', 'none');
+  await expect(stage.locator('#stage-left canvas')).toHaveCSS('animation-name', 'none');
+  await expect(stage.locator('#hud-right [role="meter"]')).toHaveAttribute('aria-valuenow', '4');
+  await expect(page.locator('#game canvas')).toBeHidden();
+  await expect(label).toHaveText('反撃　−3');
+  await expect(stage.locator('#hud-left [role="meter"]')).toHaveAttribute('aria-valuenow', '6');
+  await page.screenshot({ path: testInfo.outputPath('battle-reduced-motion.png') });
+  await expect(stage).toBeHidden();
+  await expect(page.locator('#game canvas')).toBeVisible();
+  const state = await getState();
+  expect(state.units.find(unit => unit.id === 'blue-2')).toMatchObject({ hp: 6, x: 4, y: 4, attacked: true });
+  expect(state.units.find(unit => unit.id === 'red-2')?.hp).toBe(4);
+});
+
 test('title screen restores a saved move and protects it from a cancelled restart', async ({ page }) => {
   const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
   await page.goto('./');

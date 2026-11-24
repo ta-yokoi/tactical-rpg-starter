@@ -72,7 +72,8 @@ export class Chiptune {
     const gain = this.context.createGain();
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, now);
-    gain.gain.setValueAtTime(volume, now);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
     oscillator.connect(gain).connect(this.output);
     oscillator.start(now);

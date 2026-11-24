@@ -458,6 +458,7 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
   .duel-card { padding-block: 2px; }
 }
 .battle-window:has(#game[data-zoom="1"]) .duel-actor canvas { width: 64px; height: 64px; }
+.battle-window:has(.combat-stage:not([hidden])) #game canvas { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .combat-stage, .combat-stage .duel-actor, .combat-stage .duel-actor canvas, .duel-damage { animation: none !important; }
   .duel-hp i { transition: none; }
