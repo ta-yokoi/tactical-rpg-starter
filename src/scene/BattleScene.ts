@@ -18,6 +18,7 @@ const element = (id: string): HTMLElement => document.getElementById(id)!;
 const button = (id: string): HTMLButtonElement => document.querySelector<HTMLButtonElement>(`#${id}`)!;
 const same = (a: Point, b: Point): boolean => a.x === b.x && a.y === b.y;
 const strikeName = (unit: Unit): string => unitProfile(unit.id).reach === 1 ? '斬撃' : '術撃';
+const soundPreferenceKey = 'tactical-rpg-starter:sound';
 
 type UnitView = {
   body: Phaser.GameObjects.Container;
@@ -136,16 +137,47 @@ export class BattleScene extends Phaser.Scene {
       this.openTitle();
       this.showNewGameConfirmation(true);
     });
-    button('sound-toggle').addEventListener('click', () => {
-      this.soundKit.toggle();
-      button('sound-toggle').setAttribute('aria-pressed', String(this.soundKit.isEnabled));
-      button('sound-toggle').textContent = this.soundKit.isEnabled ? '♪ 音声 ON' : '♪ 音声 OFF';
-    });
+    this.setupSoundControls();
     window.__GAME_TEST__ = { getState: () => structuredClone(this.state), isBusy: () => this.busy };
     this.resetUnits();
     this.drawChapterLabels();
     this.drawUi();
     this.openTitle();
+  }
+
+  private setupSoundControls(): void {
+    try {
+      this.soundKit.setEnabled(window.localStorage.getItem(soundPreferenceKey) !== 'off');
+    } catch { /* The buttons still work when storage is unavailable. */ }
+    const controls = [button('sound-toggle'), button('title-sound-toggle')];
+    const refresh = (): void => {
+      const enabled = this.soundKit.isEnabled;
+      for (const control of controls) {
+        control.setAttribute('aria-pressed', String(enabled));
+        control.textContent = enabled ? '♪ 音声 ON' : '♪ 音声 OFF';
+      }
+    };
+    const toggle = (): void => {
+      const enabled = !this.soundKit.isEnabled;
+      this.soundKit.setEnabled(enabled);
+      if (enabled && !this.titleDialog.open) this.soundKit.start();
+      try {
+        window.localStorage.setItem(soundPreferenceKey, enabled ? 'on' : 'off');
+      } catch { /* Keep the current session's choice. */ }
+      refresh();
+    };
+    controls.forEach(control => control.addEventListener('click', toggle));
+    const visibilityChanged = (): void => {
+      if (document.hidden) this.soundKit.stop();
+      else if (!this.titleDialog.open) this.soundKit.start();
+    };
+    document.addEventListener('visibilitychange', visibilityChanged);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener('visibilitychange', visibilityChanged);
+      controls.forEach(control => control.removeEventListener('click', toggle));
+      this.soundKit.stop();
+    });
+    refresh();
   }
 
   private openTitle(): void {

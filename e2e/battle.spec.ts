@@ -320,7 +320,7 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
 });
 
 test.describe('touch screen', () => {
-  test.use({ hasTouch: true });
+  test.use({ hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 
   test('mobile layout and sound control remain usable', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -349,6 +349,11 @@ test.describe('touch screen', () => {
     }
     await expect.poll(() => page.evaluate(() => Boolean(window.__GAME_TEST__))).toBe(true);
     await expect(newGame(page)).toBeFocused();
+    const titleSound = titleMenu(page).getByRole('button', { name: '音声' });
+    const audioStarts = () => page.locator('html').getAttribute('data-synth-starts').then(Number);
+    await expect(titleSound).toHaveAttribute('aria-pressed', 'true');
+    await titleSound.tap();
+    await expect(titleSound).toHaveAttribute('aria-pressed', 'false');
     await page.screenshot({ path: testInfo.outputPath('title-mobile.png') });
     await newGame(page).tap();
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
@@ -358,18 +363,37 @@ test.describe('touch screen', () => {
     });
     await expect.poll(scale).toEqual({ x: 2, y: 2 });
     await page.touchscreen.tap(...await tilePosition(page, 1, 4));
-    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.getState().selectedId)).toBe('blue-2');
-    const audioStarts = () => page.locator('html').getAttribute('data-synth-starts').then(Number);
-    await expect.poll(audioStarts).toBeGreaterThan(0);
-    await expect(page.getByRole('button', { name: '♪ 音声 ON' })).toBeVisible();
-    await page.getByRole('button', { name: '♪ 音声 ON' }).click();
-    await expect(page.getByRole('button', { name: '♪ 音声 OFF' })).toBeVisible();
+    const getState = () => page.evaluate(() => window.__GAME_TEST__!.getState());
+    await expect.poll(async () => (await getState()).selectedId).toBe('blue-2');
+    const battleSound = page.locator('#sound-toggle');
+    await expect(battleSound).toHaveAttribute('aria-pressed', 'false');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    const muted = await audioStarts();
     await page.touchscreen.tap(...await tilePosition(page, 2, 4));
-    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.getState().units[1].x)).toBe(2);
+    await expect.poll(async () => (await getState()).units[1].x).toBe(2);
     await expect(page.locator('#end-turn')).toBeEnabled();
-    expect(await audioStarts()).toBe(muted);
+    expect(await audioStarts()).toBe(0);
+    const beforeReload = await getState();
+    await page.reload();
+    await expect(titleSound).toHaveAttribute('aria-pressed', 'false');
+    await continueGame(page).tap();
+    expect(await getState()).toEqual(beforeReload);
+    await expect(battleSound).toHaveAttribute('aria-pressed', 'false');
+    await battleSound.tap();
+    await expect.poll(audioStarts).toBeGreaterThan(0);
+    const setBackground = (hidden: boolean) => page.evaluate(hidden => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+    await setBackground(true);
+    const backgroundStarts = await audioStarts();
+    // Observe two soundtrack beats while backgrounded.
+    await page.evaluate(() => new Promise(resolve => window.setTimeout(resolve, 600)));
+    expect(await audioStarts()).toBe(backgroundStarts);
+    await setBackground(false);
+    await expect.poll(audioStarts).toBeGreaterThan(backgroundStarts);
+    await page.locator('#return-title').tap();
+    await expect(titleSound).toHaveAttribute('aria-pressed', 'true');
+    await continueGame(page).tap();
     await page.screenshot({ path: testInfo.outputPath('battle-mobile.png'), fullPage: true });
     await page.locator('#restart').tap();
     await page.locator('#game').scrollIntoViewIfNeeded();
@@ -382,10 +406,25 @@ test.describe('touch screen', () => {
     await expect(forecast).toContainText('反撃');
     await forecast.getByRole('button', { name: '戻る' }).tap();
     await expect(forecast).toBeHidden();
-    expect(await page.evaluate(() => window.__GAME_TEST__!.getState().units[3].hp)).toBe(7);
+    expect((await getState()).units[3].hp).toBe(7);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect.poll(scale).toEqual({ x: 2, y: 2 });
+    await page.locator('#game').scrollIntoViewIfNeeded();
+    await page.touchscreen.tap(...await tilePosition(page, 6, 4));
+    await expect(forecast).toBeVisible();
+    await forecast.getByRole('button', { name: '攻撃する' }).tap();
+    const stage = page.locator('#combat-stage');
+    await expect(stage).toBeInViewport();
+    await expect(stage).toHaveAttribute('data-motion', 'spell');
+    await expect(stage.locator('#stage-label')).toContainText('−3');
+    await page.screenshot({ path: testInfo.outputPath('battle-landscape.png') });
+    await expect.poll(async () => (await getState()).units[3].hp).toBe(4);
+    expect((await getState()).units[1].hp).toBe(6);
     await page.setViewportSize({ width: 375, height: 812 });
     await expect.poll(scale).toEqual({ x: 2, y: 2 });
     await page.setViewportSize({ width: 320, height: 720 });
+    await expect.poll(scale).toEqual({ x: 1, y: 1 });
+    await page.setViewportSize({ width: 720, height: 320 });
     await expect.poll(scale).toEqual({ x: 1, y: 1 });
   });
 });

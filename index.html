@@ -56,7 +56,7 @@
           </div>
           <div class="combat-log"><span class="panel-label">直近の交戦</span><p id="combat-log" aria-live="polite"></p></div>
           <div class="roster-section"><span class="panel-label">味方部隊</span><div id="roster"></div></div>
-          <div class="toolbar"><button id="sound-toggle" type="button" aria-pressed="true">♪ 音声 ON</button><button id="restart" type="button">↻ この章をやり直す</button><button id="return-title" type="button">タイトルへ</button></div>
+          <div class="toolbar"><button id="sound-toggle" type="button" aria-label="音声" aria-pressed="true">♪ 音声 ON</button><button id="restart" type="button">↻ この章をやり直す</button><button id="return-title" type="button">タイトルへ</button></div>
           <details class="legend"><summary>操作と地形</summary><p><span class="swatch move"></span>青いマスへ移動（最大3マス）</p><p><span class="swatch attack"></span>橙の枠の敵を攻撃</p><p id="board-controls">クリック・タップでマスを選択。キーボードでは矢印で照準、Enterで決定。</p><p id="escort-help" hidden>ナギは毎ターン2マスまで移動でき、攻撃・反撃はできません。川は橋から渡ります。</p><p id="hold-help" hidden>見張り台では被ダメージが1減ります。敵フェイズ終了時に味方がいれば防衛が1回進み、味方がいなければ連続回数は0に戻ります。味方フェイズ中は守り手を交代しても連続回数を維持できます。</p><p>低木では被ダメージが1減ります。石垣は通行と術を遮ります。敵はターン終了後に自動で動きます。</p></details>
         </aside>
       </section>
@@ -110,6 +110,7 @@
           <button id="continue-game" type="button" class="primary-button" aria-describedby="title-checkpoint">続きから</button>
           <p id="title-checkpoint"></p>
           <button id="new-game" type="button" class="title-secondary">はじめから</button>
+          <button id="title-sound-toggle" type="button" class="title-secondary" aria-label="音声" aria-pressed="true">♪ 音声 ON</button>
         </div>
         <div id="new-game-confirmation" hidden>
           <p id="new-game-warning">現在の進行をリセットして、第1章から始めますか？</p>

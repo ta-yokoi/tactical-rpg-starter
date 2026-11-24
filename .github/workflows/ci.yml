@@ -40,14 +40,13 @@ jobs:
       - run: npm run test:e2e
         env:
           GITHUB_PAGES: 'true'
-      - name: Check title and saved progress in Firefox and WebKit
+      - name: Check Firefox save recovery and WebKit mobile battles
         env:
           GITHUB_PAGES: 'true'
         run: |
           npx playwright install --with-deps firefox webkit
-          for browser in firefox webkit; do
-            npm run test:e2e -- --browser="$browser" --grep 'title screen restores' --reporter=list --output="browser-compat-results/$browser"
-          done
+          npm run test:e2e -- --browser=firefox --grep 'title screen restores' --reporter=list --output=browser-compat-results/firefox
+          npm run test:e2e -- --browser=webkit --grep 'title screen restores|mobile layout' --reporter=list --output=browser-compat-results/webkit
       - name: Save browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4

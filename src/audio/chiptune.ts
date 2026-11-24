@@ -14,16 +14,13 @@ export class Chiptune {
 
   get isEnabled(): boolean { return this.enabled; }
 
-  toggle(): boolean {
-    this.enabled = !this.enabled;
-    if (this.output) this.output.gain.value = Number(this.enabled);
-    if (this.enabled) {
-      this.start();
-    } else this.stop();
-    return this.enabled;
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) this.stop();
   }
 
   stop(): void {
+    if (this.output) this.output.gain.value = 0;
     if (this.timer !== null) window.clearInterval(this.timer);
     this.timer = null;
     for (const id of this.pending) window.clearTimeout(id);
@@ -31,13 +28,14 @@ export class Chiptune {
   }
 
   start(): void {
-    if (!this.enabled) return;
+    if (!this.enabled || document.hidden) return;
     try {
-      if (!this.context) {
-        this.context = new AudioContext();
+      if (!this.context || !this.output) {
+        this.context ??= new AudioContext();
         this.output = this.context.createGain();
         this.output.connect(this.context.destination);
       }
+      this.output.gain.value = 1;
       void this.context.resume().catch(() => undefined);
       if (this.timer === null) {
         this.timer = window.setInterval(() => {
@@ -52,7 +50,7 @@ export class Chiptune {
   }
 
   play(cue: Cue): void {
-    if (!this.enabled) return;
+    if (!this.enabled || document.hidden) return;
     this.start();
     const notes: Record<Cue, number[]> = {
       select: [660], move: [392, 523], attack: [220, 440], hurt: [180, 130],
@@ -68,7 +66,7 @@ export class Chiptune {
   }
 
   private tone(frequency: number, duration: number, type: OscillatorType, volume: number): void {
-    if (!this.context || !this.output || !this.enabled || this.context.state !== 'running') return;
+    if (!this.context || !this.output || !this.enabled || document.hidden || this.context.state !== 'running') return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
