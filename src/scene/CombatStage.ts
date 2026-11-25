@@ -1,5 +1,6 @@
 import { combatBackdrop, type ArenaGround } from './combatArt';
-import { COMBAT_SIZE, drawCombatant, type Pose } from './combatSprites';
+import { COMBAT_SIZE, drawCombatant, type CombatEquipment, type Pose } from './combatSprites';
+import type { Formation } from '../game/formation';
 import type { Strike, Unit } from '../game/rules';
 import { unitProfile } from '../game/units';
 import { drawPortrait } from './portraits';
@@ -14,7 +15,7 @@ const anticipation: Record<Motion, readonly number[]> = {
 const poses = ['windup', 'advance', 'release'] as const;
 export const duelGroundLabels = { road: '古道', wood: '川辺の橋', meadow: '草地' } as const;
 
-type Fighter = { unit: Unit; actor: HTMLElement; card: HTMLElement };
+type Fighter = { unit: Unit; actor: HTMLElement; card: HTMLElement; equipment: CombatEquipment };
 
 export class CombatStage {
   private readonly stage = document.querySelector<HTMLElement>('#combat-stage')!;
@@ -27,7 +28,7 @@ export class CombatStage {
     private readonly reduceMotion: MediaQueryList,
   ) {}
 
-  open(first: Unit, second: Unit, ground: ArenaGround, gear: (unit: Unit) => string): void {
+  open(first: Unit, second: Unit, ground: ArenaGround, gear: (unit: Unit) => string, formation?: Formation): void {
     const landscape = this.backgrounds.get(ground) ?? combatBackdrop(ground);
     this.backgrounds.set(ground, landscape);
     this.stage.style.setProperty('--battle-backdrop', landscape);
@@ -48,7 +49,8 @@ export class CombatStage {
       drawPortrait(card.querySelector('canvas')!, unit.id);
       const canvas = actor.querySelector('canvas')!;
       canvas.width = canvas.height = COMBAT_SIZE;
-      const fighter = { unit, actor, card };
+      const equipment = unit.id === 'blue-1' ? formation?.astel : unit.id === 'blue-2' ? formation?.lina : undefined;
+      const fighter: Fighter = { unit, actor, card, equipment: equipment ?? 'standard' };
       this.drawPose(fighter, 'ready');
       this.updateHp(fighter, unit.hp);
       return fighter;
@@ -114,7 +116,7 @@ export class CombatStage {
 
   private drawPose(fighter: Fighter, pose: Pose): void {
     fighter.actor.dataset.pose = pose;
-    drawCombatant(fighter.actor.querySelector('canvas')!, fighter.unit.id, pose);
+    drawCombatant(fighter.actor.querySelector('canvas')!, fighter.unit.id, pose, fighter.equipment);
   }
 
   private updateHp(fighter: Fighter, hp: number): void {

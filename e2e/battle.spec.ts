@@ -233,12 +233,27 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
       const target = (await state()).units.find(item => item.id === targetId)!;
       await tile(target.x, target.y);
       const attackDialog = page.getByRole('dialog', { name: '戦闘予告' });
-      if ((await state()).chapterId === 2 && id === 'blue-2' && targetId === 'red-2') {
+      const chapterId = (await state()).chapterId;
+      const cometDuel = chapterId === 2 && id === 'blue-2' && targetId === 'red-2';
+      const shieldDuel = chapterId === 3 && id === 'blue-1' && targetId === 'red-1';
+      if (cometDuel) {
         await expect(attackDialog).toContainText('攻撃 4ダメージ');
         await expect(attackDialog).toContainText('低木 −1');
         await page.screenshot({ path: testInfo.outputPath('formation-combat.png'), fullPage: true });
       }
       await attackDialog.getByRole('button', { name: '攻撃する' }).click();
+      if (cometDuel || shieldDuel) {
+        await expect(page.locator('#combat-stage')).toBeVisible();
+        await expect(page.locator('#hud-left .duel-weapon')).toHaveText(cometDuel ? '彗星の杖' : '灯守の盾');
+        const canvas = page.locator('#stage-left canvas');
+        const color = cometDuel ? [220, 224, 255] : [57, 117, 105];
+        expect(await canvas.evaluate((sprite: HTMLCanvasElement, [r, g, b]) => {
+          const { data } = sprite.getContext('2d')!.getImageData(0, 0, sprite.width, sprite.height);
+          return data.some((value, offset) =>
+            offset % 4 === 0 && value === r && data[offset + 1] === g && data[offset + 2] === b && data[offset + 3] === 255);
+        }, color)).toBe(true);
+        if (cometDuel) await page.screenshot({ path: testInfo.outputPath('battle-comet.png'), fullPage: true });
+      }
       await waitForAttack(id);
     };
     await order('blue-1', 2, 3);

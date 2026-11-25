@@ -569,7 +569,8 @@ export class BattleScene extends Phaser.Scene {
       const terrain = [terrainAt(previous, source).frame, terrainAt(previous, hit).frame];
       const ground: ArenaGround = terrain.includes('bridge') ? 'wood'
         : terrain.some(tile => ['horizontal', 'north', 'south', 'vertical'].includes(tile)) ? 'road' : 'meadow';
-      this.combatStage.open(source, hit, ground, unit => this.combatGear(unit));
+      const formation = this.state.chapterId === 1 ? undefined : this.state.formation;
+      this.combatStage.open(source, hit, ground, unit => this.combatGear(unit), formation);
       this.drawUi();
       if (!this.reduceMotion.matches) await this.pause(duelTiming.enter);
       await this.showHit(source, hit, forecast.opening, false);

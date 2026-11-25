@@ -2,6 +2,7 @@ import { pixelPainter } from './pixelPainter';
 
 export const COMBAT_SIZE = 64;
 export type Pose = 'ready' | 'windup' | 'advance' | 'release' | 'strike' | 'recover' | 'hit' | 'guard';
+export type CombatEquipment = 'standard' | 'shield' | 'comet';
 type Point = readonly [number, number];
 type Painter = ReturnType<typeof pixelPainter>;
 type Palette = {
@@ -14,15 +15,15 @@ type Palette = {
 };
 
 const gear: Record<string, Palette> = {
-  'blue-1': { kit: 'knight', cloth: ['#263756', '#3d587e', '#5f94bd', '#a9d8da'],
+  'blue-1': { kit: 'knight', cloth: ['#263c65', '#416f9c', '#68a7c4', '#bde7e1'],
     hair: ['#422a35', '#73503d', '#ad7e51'], skin: ['#a86252', '#dc9470', '#f6c996'], accent: '#f4c675', gem: '#86d4e1' },
-  'red-1': { kit: 'raider', cloth: ['#402737', '#704053', '#ad5654', '#e78968'],
+  'red-1': { kit: 'raider', cloth: ['#4e283d', '#954a50', '#da775f', '#ffbd86'],
     hair: ['#292736', '#51404a', '#8b6465'], skin: ['#99594b', '#d18761', '#efb782'], accent: '#f1b96c', gem: '#efa26f' },
-  'blue-2': { kit: 'star', cloth: ['#36274f', '#595080', '#8675b7', '#bdafe1'],
+  'blue-2': { kit: 'star', cloth: ['#382958', '#6e55a0', '#ac8fd4', '#d9c4f0'],
     hair: ['#726788', '#b4a6cb', '#eee3ed'], skin: ['#a76771', '#eaa58c', '#ffcfad'], accent: '#f0ce8b', gem: '#a9e4ff' },
-  'red-2': { kit: 'ash', cloth: ['#3b253d', '#672f53', '#9b4865', '#cb7b82'],
+  'red-2': { kit: 'ash', cloth: ['#412642', '#79394f', '#b8596c', '#e48987'],
     hair: ['#413244', '#7c626e', '#b79aa0'], skin: ['#a46865', '#d49881', '#efd0a8'], accent: '#eac17c', gem: '#ff9376' },
-  'blue-escort': { kit: 'ferryman', cloth: ['#263f38', '#416853', '#68886a', '#a9b779'],
+  'blue-escort': { kit: 'ferryman', cloth: ['#234a47', '#43796a', '#75ad89', '#c4d59b'],
     hair: ['#3e3235', '#685043', '#997657'], skin: ['#94624b', '#c38b61', '#f0bc86'], accent: '#efc481', gem: '#fbe187' },
 };
 
@@ -41,14 +42,18 @@ const poses: Record<Pose, { lean: number; crouch: number; feet: number; weapon: 
   hit: { lean: -5, crouch: 2, feet: 2, weapon: [35, 38] },
   guard: { lean: -1, crouch: 3, feet: 0, weapon: [40, 33] },
 };
+const bladeTips: Record<Pose, Point> = {
+  ready: [54, 12], windup: [15, 10], advance: [49, 4], release: [56, 8],
+  strike: [60, 33], recover: [55, 49], hit: [47, 17], guard: [50, 12],
+};
 const frames = new Map<string, HTMLCanvasElement>();
-type Body = { palette: Palette; pose: Pose; painter: Painter; anchor: Point };
+type Body = { palette: Palette; pose: Pose; painter: Painter; anchor: Point; equipment: CombatEquipment };
 
-export function drawCombatant(canvas: HTMLCanvasElement, id: string, pose: Pose): void {
-  const key = `${id}:${pose}`;
+export function drawCombatant(canvas: HTMLCanvasElement, id: string, pose: Pose, equipment: CombatEquipment = 'standard'): void {
+  const key = `${id}:${pose}:${equipment}`;
   let frame = frames.get(key);
   if (!frame) {
-    frame = paintFrame(gear[id], pose);
+    frame = paintFrame(gear[id], pose, equipment);
     frames.set(key, frame);
   }
   const target = canvas.getContext('2d')!;
@@ -56,12 +61,12 @@ export function drawCombatant(canvas: HTMLCanvasElement, id: string, pose: Pose)
   target.drawImage(frame, 0, 0);
 }
 
-function paintFrame(palette: Palette, pose: Pose): HTMLCanvasElement {
+function paintFrame(palette: Palette, pose: Pose, equipment: CombatEquipment): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = COMBAT_SIZE;
   const painter = pixelPainter(canvas.getContext('2d')!);
   const stance = poses[pose];
-  const body: Body = { palette, pose, painter, anchor: [stance.lean, stance.crouch] };
+  const body: Body = { palette, pose, painter, anchor: [stance.lean, stance.crouch], equipment };
   const armored = palette.kit === 'knight' || palette.kit === 'raider';
 
   if (armored) paintArmor(body);
@@ -90,6 +95,10 @@ function paintArmor({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
     [7, 48], [10 + x, 36]);
   s(deep, [16 + x, 25 + y], [22 + x, 29 + y], [21 + x, 41], [15, 48], [7 - foot, 52], [6, 52], [10, 46]);
   s(mid, [17 + x, 27 + y], [20 + x, 30 + y], [18, 43], [10, 47], [12, 39]);
+  if (palette.kit === 'knight') {
+    s(main, [15 + x, 29 + y], [17 + x, 34 + y], [15, 43], [8 - foot, 51], [9, 48], [12, 40]);
+    p(14, 44, 2, 1, light);
+  }
 
   s(ink, [hip - 1, 38 + y], [hip + 11, 39 + y], [leading - 5, 48], [leading - 6, footY - 6],
     [leading + 2, footY - 4], [leading + 4, footY], [leading - 9, footY],
@@ -111,8 +120,10 @@ function paintArmor({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
   p(24 + x, 37 + y, 10, 2, ink); p(28 + x, 37 + y, 3, 2, palette.accent);
   p(24 + x, 40 + y, 5, 1, main); p(26 + x, 31 + y, 6, 1, light);
   if (palette.kit === 'raider') {
-    p(20 + x, 25 + y, 9, 2, '#745259'); p(23 + x, 28 + y, 3, 2, '#e1ad84');
-    p(32 + x, 33 + y, 2, 2, palette.accent);
+    s(ink, [12 + x, 29 + y], [16 + x, 22 + y], [21 + x, 21 + y], [25 + x, 25 + y], [23 + x, 31 + y], [17 + x, 34 + y]);
+    s(main, [14 + x, 29 + y], [17 + x, 23 + y], [21 + x, 22 + y], [24 + x, 25 + y], [21 + x, 30 + y], [17 + x, 32 + y]);
+    p(17 + x, 24 + y, 4, 2, light); p(17 + x, 28 + y, 3, 2, deep);
+    p(33 + x, 33 + y, 2, 2, palette.accent);
   }
 }
 
@@ -149,7 +160,7 @@ function paintRobe({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x,
   }
 }
 
-function paintHead({ palette, painter: { pixel: p, shape: s }, anchor: [x, y] }: Body): void {
+function paintHead({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y] }: Body): void {
   const [deep, mid, main, light] = palette.cloth;
   const [hairDark, hair, hairLight] = palette.hair;
   const [skinShade, skin, skinLight] = palette.skin;
@@ -167,13 +178,19 @@ function paintHead({ palette, painter: { pixel: p, shape: s }, anchor: [x, y] }:
   p(24 + x, 10 + y, 7, 2, hair); p(23 + x, 12 + y, 5, 1, hairLight);
 
   if (palette.kit === 'knight') {
+    s(ink, [23 + x, 10 + y], [23 + x, 6 + y], [29 + x, 2 + y], [31 + x, 5 + y], [29 + x, 9 + y]);
+    s(light, [25 + x, 8 + y], [25 + x, 6 + y], [29 + x, 3 + y], [30 + x, 5 + y], [28 + x, 8 + y]);
     s(deep, [17 + x, 15 + y], [20 + x, 8 + y], [25 + x, 5 + y], [32 + x, 6 + y],
       [36 + x, 10 + y], [34 + x, 13 + y], [28 + x, 12 + y], [23 + x, 15 + y], [20 + x, 19 + y]);
     s(main, [18 + x, 14 + y], [21 + x, 9 + y], [25 + x, 6 + y], [32 + x, 7 + y], [34 + x, 10 + y],
       [28 + x, 10 + y], [24 + x, 13 + y], [21 + x, 16 + y]);
     p(24 + x, 7 + y, 5, 1, light); p(30 + x, 10 + y, 5, 1, palette.accent);
-    p(21 + x, 15 + y, 1, 3, light);
+    p(20 + x, 14 + y, 3, 5, mid); p(21 + x, 15 + y, 1, 3, light);
+    p(27 + x, 13 + y, 5, 1, steel);
   } else if (palette.kit === 'raider') {
+    s(ink, [29 + x, 12 + y], [34 + x, 5 + y], [37 + x, 3 + y], [39 + x, 5 + y], [37 + x, 12 + y], [34 + x, 15 + y]);
+    s(main, [32 + x, 11 + y], [35 + x, 6 + y], [37 + x, 4 + y], [38 + x, 5 + y], [36 + x, 11 + y]);
+    p(36 + x, 6 + y, 1, 3, light);
     p(21 + x, 11 + y, 14, 2, main); p(24 + x, 11 + y, 7, 1, light);
     s(palette.accent, [19 + x, 12 + y], [16 + x, 4 + y], [18 + x, 5 + y], [23 + x, 10 + y], [22 + x, 13 + y]);
     p(17 + x, 5 + y, 1, 3, shine); p(25 + x, 20 + y, 2, 2, hair); p(31 + x, 19 + y, 1, 2, skinShade);
@@ -184,7 +201,21 @@ function paintHead({ palette, painter: { pixel: p, shape: s }, anchor: [x, y] }:
       [35 + x, 11 + y], [40 + x, 12 + y], [38 + x, 14 + y], [20 + x, 15 + y]);
     p(22 + x, 12 + y, 14, 1, brown); p(25 + x, 7 + y, 3, 1, shine);
     p(29 + x, 22 + y, 4, 1, hairDark);
+  } else if (palette.kit === 'star') {
+    const sweep = pose === 'release' || pose === 'strike' ? 4 : pose === 'hit' ? 2 : 0;
+    s(ink, [13 - sweep + x, 28 + y], [17 + x, 21 + y], [17 + x, 13 + y], [19 + x, 8 + y], [24 + x, 5 + y],
+      [31 + x, 5 + y], [36 + x, 9 + y], [37 + x, 12 + y], [32 + x, 11 + y], [28 + x, 15 + y],
+      [26 + x, 23 + y], [22 + x, 28 + y]);
+    s(hair, [15 - sweep + x, 27 + y], [18 + x, 21 + y], [18 + x, 13 + y], [21 + x, 8 + y], [25 + x, 6 + y],
+      [31 + x, 6 + y], [35 + x, 9 + y], [35 + x, 11 + y], [31 + x, 10 + y], [27 + x, 14 + y],
+      [25 + x, 22 + y], [21 + x, 27 + y]);
+    s(hairLight, [19 + x, 13 + y], [22 + x, 8 + y], [27 + x, 6 + y], [32 + x, 7 + y], [33 + x, 8 + y],
+      [27 + x, 9 + y], [24 + x, 12 + y], [22 + x, 22 + y], [17 - sweep + x, 26 + y]);
+    p(26 + x, 9 + y, 2, 2, palette.accent); p(26 + x, 8 + y, 1, 2, shine);
   } else {
+    s(ink, [15 + x, 22 + y], [15 + x, 13 + y], [17 + x, 8 + y], [21 + x, 4 + y],
+      [28 + x, 2 + y], [34 + x, 5 + y], [38 + x, 11 + y], [36 + x, 14 + y], [28 + x, 11 + y],
+      [25 + x, 21 + y], [22 + x, 27 + y], [17 + x, 27 + y]);
     s(deep, [16 + x, 22 + y], [16 + x, 14 + y], [18 + x, 9 + y], [23 + x, 5 + y],
       [30 + x, 4 + y], [35 + x, 7 + y], [37 + x, 12 + y], [34 + x, 13 + y],
       [31 + x, 9 + y], [28 + x, 10 + y], [24 + x, 15 + y], [24 + x, 22 + y], [21 + x, 26 + y]);
@@ -193,18 +224,13 @@ function paintHead({ palette, painter: { pixel: p, shape: s }, anchor: [x, y] }:
     p(24 + x, 7 + y, 4, 1, light); p(20 + x, 10 + y, 3, 1, light);
     p(22 + x, 16 + y, 2, 6, hair); p(23 + x, 17 + y, 1, 4, hairLight);
     p(18 + x, 20 + y, 2, 2, mid); p(29 + x, 7 + y, 2, 2, palette.accent);
-    if (palette.kit === 'star') {
-      s(hair, [25 + x, 12 + y], [28 + x, 11 + y], [27 + x, 15 + y], [26 + x, 19 + y],
-        [25 + x, 24 + y], [21 + x, 26 + y], [22 + x, 21 + y]);
-      p(25 + x, 13 + y, 2, 3, hairLight); p(23 + x, 21 + y, 2, 3, hairLight);
-    } else {
-      s(mid, [30 + x, 21 + y], [37 + x, 19 + y], [35 + x, 24 + y], [30 + x, 25 + y], [25 + x, 24 + y]);
-      p(31 + x, 22 + y, 3, 1, main);
-    }
+    p(26 + x, 4 + y, 4, 1, main);
+    s(mid, [30 + x, 21 + y], [37 + x, 19 + y], [35 + x, 24 + y], [30 + x, 25 + y], [25 + x, 24 + y]);
+    p(31 + x, 22 + y, 3, 1, main);
   }
 }
 
-function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y] }: Body): void {
+function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment }: Body): void {
   const [deep, mid, main, light] = palette.cloth;
   const [handX, handY] = poses[pose].weapon;
   const knight = palette.kit === 'knight';
@@ -220,22 +246,34 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
 
   const sweeping = pose === 'strike';
   const raised = pose === 'windup' || pose === 'advance';
-  const exit: Point = sweeping ? [59, handY + 1] : raised ? [handX - 6, 6] : pose === 'recover' ? [55, 47] : [54, 13];
   if (knight) {
-    const [tipX, tipY] = pose === 'release' ? [56, 8] : exit;
-    s(ink, [handX + 1, handY - 2], [tipX - 1, tipY - 1], [tipX + 3, tipY], [tipX + 2, tipY + 4], [handX + 3, handY + 3]);
-    s(shadeSteel, [handX + 2, handY], [tipX, tipY], [tipX + 2, tipY + 1], [tipX + 1, tipY + 3], [handX + 3, handY + 2]);
-    s(shine, [handX + 2, handY], [tipX, tipY], [tipX + 1, tipY + 1], [handX + 3, handY + 1]);
+    const [tipX, tipY] = bladeTips[pose];
+    const dx = tipX - handX;
+    const dy = tipY - handY;
+    const length = Math.hypot(dx, dy);
+    const nx = Math.round(-dy * 2.4 / length);
+    const ny = Math.round(dx * 2.4 / length);
+    const neckX = Math.round(tipX - dx * 4 / length);
+    const neckY = Math.round(tipY - dy * 4 / length);
+    s(ink, [handX - nx, handY - ny], [neckX - nx, neckY - ny], [tipX, tipY],
+      [neckX + nx, neckY + ny], [handX + nx, handY + ny]);
+    s(steel, [handX, handY], [tipX, tipY], [neckX + nx - Math.sign(nx), neckY + ny - Math.sign(ny)],
+      [handX + nx - Math.sign(nx), handY + ny - Math.sign(ny)]);
+    s(shine, [handX, handY], [tipX, tipY], [neckX - nx + Math.sign(nx), neckY - ny + Math.sign(ny)],
+      [handX - nx + Math.sign(nx), handY - ny + Math.sign(ny)]);
     p(handX, handY - 3, 2, 7, palette.accent);
-    const sx = (guarding ? 23 : 16) + x;
+    const ward = equipment === 'shield';
+    const sx = (guarding ? 23 : sweeping ? 13 : 16) + x;
     const sy = (guarding ? 27 : 32) + y;
     s(ink, [sx - 7, sy + 1], [sx, sy - 3], [sx + 8, sy], [sx + 9, sy + 7],
       [sx + 3, sy + 14], [sx - 3, sy + 12], [sx - 7, sy + 8]);
     s(shadeSteel, [sx - 6, sy + 1], [sx, sy - 2], [sx + 7, sy + 1], [sx + 8, sy + 7],
       [sx + 3, sy + 13], [sx - 2, sy + 11], [sx - 6, sy + 7]);
-    s(main, [sx - 4, sy + 2], [sx, sy], [sx + 6, sy + 2], [sx + 6, sy + 7],
+    s(ward ? '#397569' : main, [sx - 4, sy + 2], [sx, sy], [sx + 6, sy + 2], [sx + 6, sy + 7],
       [sx + 2, sy + 11], [sx - 3, sy + 9]);
-    p(sx - 3, sy + 2, 4, 1, light); p(sx + 1, sy + 3, 2, 6, palette.accent); p(sx - 1, sy + 5, 6, 2, palette.accent);
+    p(sx - 3, sy + 2, 4, 1, ward ? '#bde5ad' : light);
+    s(palette.accent, [sx + 1, sy + 2], [sx + 5, sy + 6], [sx + 1, sy + 10], [sx - 3, sy + 6]);
+    p(sx, sy + 5, 3, 2, ward ? '#bde5ad' : shadeSteel);
   } else {
     const [headX, headY] = sweeping ? [55, 37] : pose === 'release' ? [53, 14] : raised ? [24, 8] : [49, 18];
     s(ink, [handX - 4, handY + 4], [headX - 2, headY], [headX + 2, headY + 2], [handX - 1, handY + 6]);
@@ -249,11 +287,11 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
   }
 }
 
-function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y] }: Body): void {
+function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment }: Body): void {
   const [deep, mid, main, light] = palette.cloth;
   const [handX, handY] = poses[pose].weapon;
   const charge = pose === 'advance' || pose === 'release';
-  const glow = palette.gem;
+  const glow = equipment === 'comet' ? '#dce0ff' : palette.gem;
   const reach = pose === 'strike' || pose === 'release';
   const tipX = palette.kit === 'ferryman' ? handX + 4 : reach ? 57 : pose === 'advance' ? handX + 5 : handX + 6;
   const tipY = pose === 'advance' ? 11 : reach ? handY - 7 : 14;
@@ -263,6 +301,13 @@ function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [
   if (palette.kit === 'ferryman') {
     p(tipX - 4, tipY, 8, 9, ink); p(tipX - 3, tipY + 1, 6, 7, brown);
     p(tipX - 2, tipY + 2, 4, 4, glow); p(tipX - 1, tipY + 2, 2, 3, shine);
+    p(tipX + 1, tipY + 1, 1, 6, palette.accent); p(tipX - 1, tipY - 2, 2, 2, ink);
+  } else if (palette.kit === 'star' && equipment === 'standard') {
+    s(ink, [tipX, tipY - 7], [tipX + 3, tipY - 3], [tipX + 6, tipY], [tipX + 3, tipY + 3],
+      [tipX, tipY + 7], [tipX - 3, tipY + 3], [tipX - 6, tipY], [tipX - 3, tipY - 3]);
+    s(glow, [tipX, tipY - 5], [tipX + 2, tipY - 2], [tipX + 4, tipY], [tipX + 2, tipY + 2],
+      [tipX, tipY + 5], [tipX - 2, tipY + 2], [tipX - 4, tipY], [tipX - 2, tipY - 2]);
+    p(tipX - 1, tipY - 2, 2, 4, shine);
   } else {
     s(ink, [tipX - 6, tipY + 1], [tipX - 3, tipY - 4], [tipX + 1, tipY - 6],
       [tipX + 5, tipY - 3], [tipX + 5, tipY + 3], [tipX + 2, tipY + 8], [tipX - 3, tipY + 6]);
@@ -270,6 +315,13 @@ function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [
       [tipX + 4, tipY - 2], [tipX + 4, tipY + 2], [tipX + 2, tipY + 7], [tipX - 2, tipY + 5]);
     s(glow, [tipX - 2, tipY + 1], [tipX, tipY - 2], [tipX + 3, tipY], [tipX + 2, tipY + 4], [tipX, tipY + 4]);
     p(tipX, tipY - 1, 2, 2, shine);
+    if (equipment === 'comet') {
+      s(glow, [tipX - 6, tipY + 2], [tipX - 1, tipY + 3], [tipX - 6, tipY + 8], [tipX - 9, tipY + 9]);
+      p(tipX - 7, tipY + 5, 2, 1, shine);
+    } else if (palette.kit === 'ash') {
+      s(glow, [tipX, tipY - 2], [tipX + 2, tipY - 8], [tipX + 4, tipY - 3], [tipX + 4, tipY + 1]);
+      p(tipX + 1, tipY - 3, 1, 2, shine);
+    }
     if (charge) {
       p(tipX - 8, tipY - 3, 2, 1, glow); p(tipX + 6, tipY - 4, 1, 3, shine);
       p(tipX - 4, tipY + 9, 2, 2, glow); p(tipX, tipY - 8, 1, 1, shine);
