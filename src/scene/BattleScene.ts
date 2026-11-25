@@ -138,7 +138,11 @@ export class BattleScene extends Phaser.Scene {
       this.showNewGameConfirmation(true);
     });
     this.setupSoundControls();
-    window.__GAME_TEST__ = { getState: () => structuredClone(this.state), isBusy: () => this.busy };
+    window.__GAME_TEST__ = {
+      getState: () => structuredClone(this.state),
+      isBusy: () => this.busy,
+      getUnitFrame: id => this.views.get(id)?.sprite.frame.name ?? null,
+    };
     this.resetUnits();
     this.drawChapterLabels();
     this.drawUi();

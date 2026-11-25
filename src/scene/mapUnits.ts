@@ -11,7 +11,8 @@ const palettes = {
 export const mapUnitIds = Object.keys(palettes) as (keyof typeof palettes)[];
 export const mapFacings = ['south', 'north', 'side'] as const;
 export type MapFacing = typeof mapFacings[number];
-export const mapPoses = ['idle', 'ready', 'step-a', 'step-b'] as const;
+export const mapPoses = ['idle', 'ready', 'step-a', 'pass', 'step-b'] as const;
+export const mapWalkCycle = ['step-a', 'pass', 'step-b', 'pass'] as const;
 type MapPose = typeof mapPoses[number];
 
 type UnitId = keyof typeof palettes;
@@ -279,27 +280,52 @@ const readyGear: Record<UnitId, Frame> = {
   ],
 };
 
+// Travel gear sits close to the body before joining the base frame at the hand.
+const walkingGear: Record<UnitId, Frame> = {
+  'blue-1': [
+    '.....', '.....', '.....', '.....', '....#', '...#w', '...#c', '..#wc',
+  ],
+  'blue-2': [
+    '.....', '.....', '.....', '..#..', '.#gw#', '..#g#', '.#t#.', '.#t#.',
+  ],
+  'blue-escort': [
+    '.....', '.....', '.....', '.....', '..##.', '.#tg#', '.#gw#', '.###.',
+  ],
+  'red-1': [
+    '.....', '.....', '...##', '..#wc', '..#cc', '..#c#', '..#t#', '.#t#.',
+  ],
+  'red-2': [
+    '.....', '.....', '....#', '...#g', '..#gw', '..###', '..#t#', '.#t#.',
+  ],
+};
+
 export function drawMapUnit(context: CanvasRenderingContext2D, id: UnitId, facing: MapFacing, pose: MapPose): void {
   const colors: Palette = { ...common, ...palettes[id] };
   const north = facing === 'north';
   const frame = facing === 'side' ? profile[id] : front[id];
   const step = pose === 'step-a' ? -1 : pose === 'step-b' ? 1 : 0;
-  const settle = pose === 'idle' ? 1 : 0;
+  const passing = pose === 'pass';
+  const settle = pose === 'idle' || passing ? 1 : 0;
+  const equipmentFrames = pose === 'ready' ? readyGear[id] : step || passing ? walkingGear[id] : undefined;
   frame.forEach((frontRow, y) => {
     const rearRow = north ? rearHead[id][y] : undefined;
-    const equipment = pose === 'ready' ? readyGear[id][y] : undefined;
+    const equipment = equipmentFrames?.[y];
     const body = rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15);
     const row = equipment === undefined ? body : body.slice(0, 15).padEnd(15, '.') + equipment;
     for (let x = 0; x < row.length; x++) {
       const symbol = row[x];
       if (symbol === '.') continue;
       const boot = y >= 17 && x >= 4 && x <= 13;
-      const stride = boot && step === (x < 9 ? -1 : 1) ? 1 : 0;
+      const nearFoot = x < 9 ? -1 : 1;
+      const stride = boot && step === nearFoot ? 1 : 0;
       const stretch = stride === 1 && y === 17;
       const backTrim = north && y >= 7 && y <= 15 && x >= 8 && x <= 11 && symbol === 'g';
       const color = backTrim ? 'l' : symbol;
+      const hem = step === -1 && facing === 'side' && y >= 13 && y <= 15 && x <= 5 && x > 0;
+      const offsetX = boot && passing ? -nearFoot : hem ? -1 : 0;
+      const pixelX = x + offsetX;
       context.fillStyle = colors[color];
-      context.fillRect(north ? TILE - 1 - x : x, y + settle + (stretch ? 0 : stride), 1, stretch ? 2 : 1);
+      context.fillRect(north ? TILE - 1 - pixelX : pixelX, y + settle + (stretch ? 0 : stride), 1, stretch ? 2 : 1);
     }
   });
 }

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { TILE } from './board';
-import { drawMapUnit, mapFacings, mapPoses, mapUnitIds } from './mapUnits';
+import { drawMapUnit, mapFacings, mapPoses, mapUnitIds, mapWalkCycle } from './mapUnits';
 
 type Pixel = (x: number, y: number, w: number, h: number, color: string) => void;
 
@@ -154,8 +154,8 @@ export function createPixelArt(scene: Phaser.Scene): void {
       }
       scene.anims.create({
         key: `${id}-${facing}-walk`,
-        frames: ['step-a', 'ready', 'step-b', 'ready'].map(pose => ({ key: 'battle-art', frame: `${id}-${facing}-${pose}` })),
-        frameRate: 14,
+        frames: mapWalkCycle.map(pose => ({ key: 'battle-art', frame: `${id}-${facing}-${pose}` })),
+        frameRate: 17,
         repeat: -1,
       });
     }

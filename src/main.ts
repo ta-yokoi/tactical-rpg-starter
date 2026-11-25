@@ -5,7 +5,13 @@ import type { GameState } from './game/rules';
 import './style.css';
 
 declare global {
-  interface Window { __GAME_TEST__?: { getState: () => GameState; isBusy: () => boolean } }
+  interface Window {
+    __GAME_TEST__?: {
+      getState: () => GameState;
+      isBusy: () => boolean;
+      getUnitFrame: (id: string) => string | number | null;
+    };
+  }
 }
 
 const parent = document.getElementById('game')!;

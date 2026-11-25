@@ -444,6 +444,40 @@ test.describe('touch screen', () => {
   });
 });
 
+test('map movement plays the walking cycle before returning to ready', async ({ page }) => {
+  await page.goto('./');
+  await newGame(page).click();
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+  const apiFrame = () => page.evaluate(() => window.__GAME_TEST__!.getUnitFrame('blue-2'));
+  await page.mouse.click(...await tilePosition(page, 1, 4));
+  await expect.poll(apiFrame).toBe('blue-2-south-ready');
+
+  const recording = await page.evaluateHandle(() => {
+    const test = window.__GAME_TEST__!;
+    return { frames: new Promise<string[]>(resolve => {
+      const frames: string[] = [];
+      const collect = (): void => {
+        if (test.isBusy()) {
+          const frame = test.getUnitFrame('blue-2');
+          if (typeof frame === 'string' && frame !== frames.at(-1)) frames.push(frame);
+        } else if (frames.length) {
+          resolve(frames);
+          return;
+        }
+        requestAnimationFrame(collect);
+      };
+      requestAnimationFrame(collect);
+    }) };
+  });
+  await page.mouse.click(...await tilePosition(page, 4, 4));
+  const frames = await recording.evaluate(sample => sample.frames);
+  await recording.dispose();
+  expect(frames.slice(0, 3)).toEqual(['blue-2-side-step-a', 'blue-2-side-pass', 'blue-2-side-step-b']);
+  expect(frames.every(frame => !frame.endsWith('-ready'))).toBe(true);
+  await expect.poll(apiFrame).toBe('blue-2-side-ready');
+  expect(await page.evaluate(() => window.__GAME_TEST__!.getState().units[1])).toMatchObject({ x: 4, y: 4, moved: true });
+});
+
 test('reduced motion keeps both hits and HP readable', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -455,6 +489,7 @@ test('reduced motion keeps both hits and HP readable', async ({ page }, testInfo
   await expect.poll(async () => (await getState()).selectedId).toBe('blue-2');
   await page.mouse.click(...await tilePosition(page, 4, 4));
   await expect(page.locator('#end-turn')).toBeEnabled();
+  expect(await page.evaluate(() => window.__GAME_TEST__!.getUnitFrame('blue-2'))).toBe('blue-2-side-ready');
   await page.mouse.click(...await tilePosition(page, 6, 4));
   const forecast = page.getByRole('dialog', { name: '戦闘予告' });
   await forecast.getByRole('button', { name: '攻撃する' }).click();
