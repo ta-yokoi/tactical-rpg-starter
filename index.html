@@ -66,6 +66,17 @@
           <p id="story-chapter" class="eyebrow"></p>
           <h2 id="ending-heading"></h2>
           <div id="story-copy"></div>
+          <section id="story-dialogue" aria-label="登場人物の会話" hidden>
+            <div class="story-speaker" aria-live="polite">
+              <canvas id="story-portrait" width="64" height="64" aria-hidden="true"></canvas>
+              <div><strong id="story-speaker"></strong><p id="story-line"></p></div>
+            </div>
+            <div class="story-navigation">
+              <button id="story-previous" type="button">前の台詞</button>
+              <output id="story-line-number" aria-label="台詞の位置"></output>
+              <button id="story-next" type="button">次の台詞</button>
+            </div>
+          </section>
           <form method="dialog"><button value="cancel">戦果に戻る</button><button id="story-advance" value="advance" class="primary-button" hidden></button><button id="story-title" value="title" class="primary-button" hidden>タイトルへ</button></form>
         </div>
       </dialog>

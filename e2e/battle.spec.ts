@@ -466,6 +466,50 @@ test('continue a legacy victory through the sluice and the new ending', async ({
 test.describe('touch screen', () => {
   test.use({ hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 
+  test('mobile story lets players read dialogue and deploy by touch', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const cleared = initialState(3);
+    cleared.units.find(unit => unit.id === 'blue-1')!.x = 4;
+    cleared.holdTurns = 3;
+    cleared.turnNumber = 7;
+    cleared.winner = 'blue';
+    await page.addInitScript(({ key, checkpoint }) => localStorage.setItem(key, checkpoint),
+      { key: checkpointKey, checkpoint: encodeCheckpoint(cleared) });
+    await page.goto('./');
+    await continueGame(page).tap();
+    await page.getByRole('button', { name: /第4章へ進む/ }).tap();
+    const story = page.getByRole('dialog', { name: '境界に灯がともる' });
+    const speaker = story.locator('#story-speaker');
+    const portrait = story.locator('#story-portrait');
+    const pixels = () => portrait.evaluate((canvas: HTMLCanvasElement) => ({
+      frame: canvas.toDataURL(), width: canvas.width, height: canvas.height,
+      colored: canvas.getContext('2d')!.getImageData(0, 0, 64, 64).data.some((value, i) => i % 4 === 3 && value === 255),
+    }));
+    await expect(speaker).toHaveText('セラ');
+    const sera = await pixels();
+    expect(sera).toMatchObject({ width: 64, height: 64, colored: true });
+    await expect(story.getByRole('button', { name: '前の台詞' })).toBeDisabled();
+    await story.getByRole('button', { name: '次の台詞' }).tap();
+    await expect(speaker).toHaveText('イオ');
+    const io = await pixels();
+    expect(io.colored).toBe(true);
+    expect(io.frame).not.toBe(sera.frame);
+    await expect(story.locator('#story-line-number')).toHaveText('2 / 3');
+    await story.getByRole('button', { name: '次の台詞' }).tap();
+    await expect(story.getByRole('button', { name: '次の台詞' })).toBeDisabled();
+    await story.getByRole('button', { name: '前の台詞' }).tap();
+    await expect(speaker).toHaveText('イオ');
+    await page.screenshot({ path: testInfo.outputPath('story-mobile.png') });
+    await page.setViewportSize({ width: 320, height: 720 });
+    const bounds = (await story.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    await page.screenshot({ path: testInfo.outputPath('story-mobile-320.png') });
+    await story.getByRole('button', { name: /第4章に出撃する/ }).tap();
+    await expect(page.locator('#chapter-label')).toHaveText('第4章');
+    expect(await page.evaluate(() => window.__GAME_TEST__!.getState().turnNumber)).toBe(1);
+  });
+
   test('mobile layout and sound control remain usable', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
@@ -571,6 +615,46 @@ test.describe('touch screen', () => {
     await page.setViewportSize({ width: 720, height: 320 });
     await expect.poll(scale).toEqual({ x: 1, y: 1 });
   });
+});
+
+test('new characters use distinct combat motions for attacks and counters', async ({ page }, testInfo) => {
+  const battle = initialState(5);
+  for (const [id, x, y] of [['blue-3', 3, 4], ['red-3', 4, 4], ['blue-4', 4, 1], ['red-4', 5, 1]] as const) {
+    Object.assign(battle.units.find(unit => unit.id === id)!, { x, y });
+  }
+  await page.addInitScript(({ key, checkpoint }) => localStorage.setItem(key, checkpoint),
+    { key: checkpointKey, checkpoint: encodeCheckpoint(battle) });
+  await page.goto('./');
+  await continueGame(page).click();
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+  const recording = await page.locator('#combat-stage').evaluateHandle(stage => {
+    const motions = new Map<string, string>();
+    new MutationObserver(() => {
+      const motion = stage.getAttribute('data-motion');
+      if (!motion || !stage.classList.contains('windup')) return;
+      const actor = stage.querySelector(stage.classList.contains('left') ? '#stage-left' : '#stage-right')!;
+      const animation = motion === 'tide' ? getComputedStyle(stage, '::after').clipPath : getComputedStyle(actor).animationName;
+      motions.set(motion, animation);
+    }).observe(stage, { attributes: true, attributeFilter: ['class', 'data-motion'] });
+    return motions;
+  });
+  for (const [attacker, defender, row] of [[3, 4, 4], [4, 5, 1]]) {
+    await page.mouse.click(...await tilePosition(page, attacker, row));
+    await page.mouse.click(...await tilePosition(page, defender, row));
+    await page.getByRole('button', { name: '攻撃する' }).click();
+    const stage = page.locator('#combat-stage');
+    await expect(stage).toBeVisible();
+    if (row === 4) {
+      await expect(stage).toHaveAttribute('data-motion', 'shield');
+      await page.screenshot({ path: testInfo.outputPath('shield-advance.png') });
+    }
+    await expect(stage).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
+  }
+  expect(await recording.evaluate(motions => Object.fromEntries(motions))).toMatchObject({
+    shield: 'shield-step', tide: expect.stringContaining('29% 57%'), hook: 'hook-step', command: 'command-step',
+  });
+  await recording.dispose();
 });
 
 test('map movement plays the walking cycle before returning to ready', async ({ page }) => {

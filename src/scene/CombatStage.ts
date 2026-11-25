@@ -1,16 +1,20 @@
 import { combatBackdrop, type ArenaGround } from './combatArt';
-import { COMBAT_SIZE, drawCombatant, type CombatEquipment, type Pose } from './combatSprites';
+import { characterMotion, COMBAT_SIZE, drawCombatant, type CharacterMotion, type CombatEquipment, type Pose } from './combatSprites';
 import type { Formation } from '../game/formation';
 import type { Strike, Unit } from '../game/rules';
 import { unitProfile } from '../game/units';
 import { drawPortrait } from './portraits';
 
 export const duelTiming = { enter: 120, impact: 410, exit: 125 };
-type Motion = 'sword' | 'axe' | 'spell';
+type Motion = 'sword' | 'axe' | 'spell' | CharacterMotion;
 const anticipation: Record<Motion, readonly number[]> = {
   sword: [70, 122, 48],
   axe: [112, 140, 56],
   spell: [112, 137, 86],
+  shield: [90, 110, 64],
+  tide: [100, 144, 80],
+  hook: [132, 108, 68],
+  command: [140, 64, 72],
 };
 const poses = ['windup', 'advance', 'release'] as const;
 export const duelGroundLabels = { road: '古道', wood: '川辺の橋', meadow: '草地', courtyard: '砦の石畳' } as const;
@@ -33,6 +37,8 @@ export class CombatStage {
     this.backgrounds.set(ground, landscape);
     this.stage.style.setProperty('--battle-backdrop', landscape);
     this.stage.className = 'combat-stage';
+    delete this.stage.dataset.motion;
+    delete this.stage.dataset.caster;
     this.stage.hidden = false;
     this.stage.classList.add('entering');
     this.label.textContent = '交戦';
@@ -60,7 +66,8 @@ export class CombatStage {
   async windup(strike: Strike, counter: boolean): Promise<void> {
     const attacker = this.find(strike.attackerId);
     const style = unitProfile(strike.attackerId).style;
-    const motion = style === 'spell' ? 'spell' : ['red-1', 'red-3'].includes(strike.attackerId) ? 'axe' : 'sword';
+    const motion = characterMotion[strike.attackerId] ??
+      (style === 'spell' ? 'spell' : strike.attackerId === 'red-1' ? 'axe' : 'sword');
     for (const fighter of this.fighters) {
       fighter.actor.querySelector('.duel-damage')!.textContent = '';
     }

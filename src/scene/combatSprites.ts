@@ -3,6 +3,10 @@ import { pixelPainter } from './pixelPainter';
 export const COMBAT_SIZE = 64;
 export type Pose = 'ready' | 'windup' | 'advance' | 'release' | 'strike' | 'recover' | 'hit' | 'guard';
 export type CombatEquipment = 'standard' | 'shield' | 'comet';
+export type CharacterMotion = 'shield' | 'tide' | 'hook' | 'command';
+export const characterMotion: Partial<Record<string, CharacterMotion>> = {
+  'blue-3': 'shield', 'blue-4': 'tide', 'red-3': 'hook', 'red-4': 'command',
+};
 type Point = readonly [number, number];
 type Painter = ReturnType<typeof pixelPainter>;
 type Palette = {
@@ -56,13 +60,13 @@ const bladeTips: Record<Pose, Point> = {
   strike: [60, 33], recover: [55, 49], hit: [47, 17], guard: [50, 12],
 };
 const frames = new Map<string, HTMLCanvasElement>();
-type Body = { palette: Palette; pose: Pose; painter: Painter; anchor: Point; equipment: CombatEquipment };
+type Body = { palette: Palette; pose: Pose; painter: Painter; anchor: Point; equipment: CombatEquipment; motion?: CharacterMotion };
 
 export function drawCombatant(canvas: HTMLCanvasElement, id: string, pose: Pose, equipment: CombatEquipment = 'standard'): void {
   const key = `${id}:${pose}:${equipment}`;
   let frame = frames.get(key);
   if (!frame) {
-    frame = paintFrame(gear[id], pose, equipment);
+    frame = paintFrame(gear[id], pose, equipment, characterMotion[id]);
     frames.set(key, frame);
   }
   const target = canvas.getContext('2d')!;
@@ -70,12 +74,12 @@ export function drawCombatant(canvas: HTMLCanvasElement, id: string, pose: Pose,
   target.drawImage(frame, 0, 0);
 }
 
-function paintFrame(palette: Palette, pose: Pose, equipment: CombatEquipment): HTMLCanvasElement {
+function paintFrame(palette: Palette, pose: Pose, equipment: CombatEquipment, motion?: CharacterMotion): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = COMBAT_SIZE;
   const painter = pixelPainter(canvas.getContext('2d')!);
   const stance = poses[pose];
-  const body: Body = { palette, pose, painter, anchor: [stance.lean, stance.crouch], equipment };
+  const body: Body = { palette, pose, painter, anchor: [stance.lean, stance.crouch], equipment, motion };
   const armored = palette.kit === 'knight' || palette.kit === 'raider';
 
   if (armored) paintArmor(body);
@@ -252,7 +256,7 @@ function paintHead({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x,
   }
 }
 
-function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment }: Body): void {
+function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment, motion }: Body): void {
   const [deep, mid, main, light] = palette.cloth;
   const [handX, handY] = poses[pose].weapon;
   const knight = palette.kit === 'knight';
@@ -269,7 +273,7 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
   const sweeping = pose === 'strike';
   const raised = pose === 'windup' || pose === 'advance';
   if (knight) {
-    const [tipX, tipY] = bladeTips[pose];
+    const [tipX, tipY] = motion === 'command' && sweeping ? [58, 49] : bladeTips[pose];
     const dx = tipX - handX;
     const dy = tipY - handY;
     const length = Math.hypot(dx, dy);
@@ -285,7 +289,8 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
       [handX - nx + Math.sign(nx), handY - ny + Math.sign(ny)]);
     p(handX, handY - 3, 2, 7, palette.accent);
     const ward = equipment === 'shield';
-    const sx = (guarding ? 23 : sweeping ? 13 : 16) + x;
+    const shieldForward = motion === 'shield' && (guarding || raised || pose === 'release' || sweeping);
+    const sx = (shieldForward ? 28 : guarding ? 23 : sweeping ? 13 : 16) + x;
     const sy = (guarding ? 27 : 32) + y;
     s(ink, [sx - 7, sy + 1], [sx, sy - 3], [sx + 8, sy], [sx + 9, sy + 7],
       [sx + 3, sy + 14], [sx - 3, sy + 12], [sx - 7, sy + 8]);
@@ -297,9 +302,15 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
     s(palette.accent, [sx + 1, sy + 2], [sx + 5, sy + 6], [sx + 1, sy + 10], [sx - 3, sy + 6]);
     p(sx, sy + 5, 3, 2, ward ? '#bde5ad' : shadeSteel);
   } else {
-    const [headX, headY] = sweeping ? [55, 37] : pose === 'release' ? [53, 14] : raised ? [24, 8] : [49, 18];
-    s(ink, [handX - 4, handY + 4], [headX - 2, headY], [headX + 2, headY + 2], [handX - 1, handY + 6]);
-    s(brown, [handX - 3, handY + 4], [headX, headY + 1], [headX + 1, headY + 2], [handX - 2, handY + 5]);
+    const [headX, headY] = sweeping ? [55, motion === 'hook' ? 44 : 37]
+      : pose === 'release' ? [53, 14] : raised ? [motion === 'hook' ? 29 : 24, 8] : [49, 18];
+    if (motion === 'hook') {
+      s(ink, [handX - 1, handY - 2], [headX + 1, headY - 2], [headX + 2, headY + 2], [handX - 2, handY + 3]);
+      s(brown, [handX, handY - 1], [headX + 1, headY - 1], [headX + 1, headY + 1], [handX - 1, handY + 2]);
+    } else {
+      s(ink, [handX - 4, handY + 4], [headX - 2, headY], [headX + 2, headY + 2], [handX - 1, handY + 6]);
+      s(brown, [handX - 3, handY + 4], [headX, headY + 1], [headX + 1, headY + 2], [handX - 2, handY + 5]);
+    }
     s(ink, [headX - 4, headY - 3], [headX + 4, headY - 7], [headX + 7, headY - 5], [headX + 8, headY + 1],
       [headX + 5, headY + 7], [headX + 1, headY + 6], [headX - 2, headY + 3]);
     s(steel, [headX - 2, headY - 2], [headX + 4, headY - 6], [headX + 6, headY - 4], [headX + 7, headY + 1],
@@ -309,14 +320,14 @@ function paintMelee({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x
   }
 }
 
-function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment }: Body): void {
+function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x, y], equipment, motion }: Body): void {
   const [deep, mid, main, light] = palette.cloth;
   const [handX, handY] = poses[pose].weapon;
   const charge = pose === 'advance' || pose === 'release';
   const glow = equipment === 'comet' ? '#dce0ff' : palette.gem;
   const reach = pose === 'strike' || pose === 'release';
   const tipX = palette.kit === 'ferryman' ? handX + 4 : reach ? 57 : pose === 'advance' ? handX + 5 : handX + 6;
-  const tipY = pose === 'advance' ? 11 : reach ? handY - 7 : 14;
+  const tipY = pose === 'advance' ? 11 : reach ? handY - (motion === 'tide' ? 2 : 7) : 14;
   s(ink, [tipX - 2, tipY + 6], [tipX + 2, tipY + 6], [handX + 1, handY + 4], [handX - 4, 61], [handX - 7, 61], [handX - 2, handY]);
   s(brown, [tipX - 1, tipY + 6], [tipX + 1, tipY + 7], [handX, handY + 4], [handX - 5, 60], [handX - 6, 60], [handX - 1, handY]);
   p(handX - 5, 58, 2, 2, palette.accent);
@@ -324,6 +335,13 @@ function paintCaster({ palette, pose, painter: { pixel: p, shape: s }, anchor: [
     p(tipX - 4, tipY, 8, 9, ink); p(tipX - 3, tipY + 1, 6, 7, brown);
     p(tipX - 2, tipY + 2, 4, 4, glow); p(tipX - 1, tipY + 2, 2, 3, shine);
     p(tipX + 1, tipY + 1, 1, 6, palette.accent); p(tipX - 1, tipY - 2, 2, 2, ink);
+  } else if (motion === 'tide') {
+    s(ink, [tipX - 6, tipY - 2], [tipX, tipY - 6], [tipX + 6, tipY - 4],
+      [tipX + 4, tipY + 1], [tipX, tipY + 6], [tipX - 5, tipY + 5]);
+    s(glow, [tipX - 4, tipY - 2], [tipX, tipY - 4], [tipX + 4, tipY - 3],
+      [tipX + 2, tipY + 1], [tipX - 1, tipY + 4], [tipX - 4, tipY + 3]);
+    p(tipX - 2, tipY - 2, 5, 1, shine);
+    if (charge) { p(tipX - 7, tipY + 4, 2, 1, glow); p(tipX + 4, tipY - 6, 2, 1, shine); }
   } else if (palette.kit === 'star' && equipment === 'standard') {
     s(ink, [tipX, tipY - 7], [tipX + 3, tipY - 3], [tipX + 6, tipY], [tipX + 3, tipY + 3],
       [tipX, tipY + 7], [tipX - 3, tipY + 3], [tipX - 6, tipY], [tipX - 3, tipY - 3]);

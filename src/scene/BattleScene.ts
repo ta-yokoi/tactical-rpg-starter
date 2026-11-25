@@ -46,6 +46,7 @@ export class BattleScene extends Phaser.Scene {
   private hasCheckpoint = false;
   private hasProgress = false;
   private pendingTarget: string | null = null;
+  private storyLine = 0;
   private bannerTimer?: number;
 
   constructor() { super('battle'); }
@@ -124,6 +125,8 @@ export class BattleScene extends Phaser.Scene {
         this.openStory(endingDialog);
       }
     });
+    button('story-previous').addEventListener('click', () => this.showDialogueLine(this.storyLine - 1));
+    button('story-next').addEventListener('click', () => this.showDialogueLine(this.storyLine + 1));
     endingDialog.addEventListener('close', () => {
       if (endingDialog.returnValue === 'title') this.openTitle();
       const next = nextChapter(this.state.chapterId);
@@ -229,12 +232,28 @@ export class BattleScene extends Phaser.Scene {
       paragraph.textContent = line;
       return paragraph;
     }));
+    this.showDialogueLine(0);
     const advance = button('story-advance');
     advance.hidden = !next;
     advance.textContent = next ? `${chapterLabel(next)}に出撃する →` : '';
     button('story-title').hidden = Boolean(next);
     dialog.returnValue = '';
     dialog.showModal();
+  }
+
+  private showDialogueLine(index: number): void {
+    const lines = chapter(this.state.chapterId).aftermath?.dialogue;
+    const dialogue = element('story-dialogue');
+    dialogue.hidden = !lines?.length;
+    const line = lines?.[index];
+    if (!lines || !line) return;
+    this.storyLine = index;
+    drawPortrait(document.querySelector<HTMLCanvasElement>('#story-portrait')!, line.speaker);
+    element('story-speaker').textContent = unitProfile(line.speaker).name;
+    element('story-line').textContent = line.text;
+    element('story-line-number').textContent = `${index + 1} / ${lines.length}`;
+    button('story-previous').disabled = index === 0;
+    button('story-next').disabled = index + 1 === lines.length;
   }
 
   private showNewGameConfirmation(show: boolean): void {

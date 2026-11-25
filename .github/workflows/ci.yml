@@ -46,7 +46,7 @@ jobs:
         run: |
           npx playwright install --with-deps firefox webkit
           npm run test:e2e -- --browser=firefox --grep 'title screen restores' --reporter=list --output=browser-compat-results/firefox
-          npm run test:e2e -- --browser=webkit --grep 'title screen restores|mobile layout|map movement|reduced motion' --reporter=list --output=browser-compat-results/webkit
+          npm run test:e2e -- --browser=webkit --grep 'title screen restores|mobile layout|mobile story|map movement|reduced motion' --reporter=list --output=browser-compat-results/webkit
       - name: Save browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -509,12 +509,52 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
   clip-path: polygon(0 88%, 17% 62%, 100% 3%, 77% 47%, 32% 83%);
   background: linear-gradient(20deg, #c7e9ee, #fff8dc);
 }
+.combat-stage[data-motion="shield"].windup.left #stage-left,
+.combat-stage[data-motion="shield"].windup.right #stage-right { animation-name: shield-step; }
+.combat-stage[data-motion="hook"].windup.left #stage-left,
+.combat-stage[data-motion="hook"].windup.right #stage-right { animation-name: hook-step; }
+.combat-stage[data-motion="command"].windup.left #stage-left,
+.combat-stage[data-motion="command"].windup.right #stage-right { animation-name: command-step; }
+.combat-stage[data-motion="shield"].impact::after {
+  background: #c8f0ce;
+  clip-path: polygon(42% 0, 100% 20%, 90% 67%, 50% 100%, 10% 68%, 0 22%, 29% 26%, 47% 68%, 74% 51%, 84% 29%);
+}
+.combat-stage[data-motion="tide"].windup::after,
+.combat-stage[data-motion="tide"].impact::after {
+  background: linear-gradient(#f2fff1, #69d9e7);
+  clip-path: polygon(0 66%, 29% 57%, 42% 35%, 59% 20%, 80% 19%, 100% 42%, 76% 34%, 57% 55%, 48% 77%, 19% 86%);
+  filter: drop-shadow(0 0 4px #73d9e0);
+}
+.combat-stage[data-motion="hook"].impact::after {
+  background: #ffcf8d;
+  clip-path: polygon(16% 0, 60% 12%, 99% 51%, 89% 97%, 71% 100%, 83% 62%, 57% 34%, 0 17%);
+  animation: axe-sweep .27s ease-out both;
+}
+.combat-stage[data-motion="command"].impact::after {
+  background: linear-gradient(#fff6dc, #e99bb6);
+  clip-path: polygon(15% 0, 35% 5%, 96% 92%, 87% 100%, 41% 63%);
+}
 .combat-stage.impact .duel-actor[data-pose="hit"] canvas { animation: struck .26s steps(4, end) both; }
 .combat-stage .duel-actor.fallen { animation: defeated .16s steps(4, end) forwards; }
 @keyframes axe-leap {
   0%, 30% { transform: translate(0, 0); }
   63% { transform: translate(calc(var(--direction) * 24cqw), -24px); }
   90% { transform: translate(calc(var(--direction) * 39cqw), -13px); }
+  100% { transform: translate(calc(var(--direction) * 40cqw), -4px); }
+}
+@keyframes shield-step {
+  0%, 34% { transform: translate(0, 0); }
+  65% { transform: translate(calc(var(--direction) * 18cqw), 0); }
+  100% { transform: translate(calc(var(--direction) * 40cqw), -4px); }
+}
+@keyframes hook-step {
+  0%, 32% { transform: translate(calc(var(--direction) * -2cqw), 2px); }
+  72% { transform: translate(calc(var(--direction) * 30cqw), -9px); }
+  100% { transform: translate(calc(var(--direction) * 40cqw), -4px); }
+}
+@keyframes command-step {
+  0%, 48% { transform: translate(0, 0); }
+  81% { transform: translate(calc(var(--direction) * 8cqw), -9px); }
   100% { transform: translate(calc(var(--direction) * 40cqw), -4px); }
 }
 @keyframes axe-sweep { from { transform: translateY(-16px) rotate(-17deg); } to { transform: translateY(11px) rotate(12deg); opacity: 0; } }
@@ -539,6 +579,14 @@ body { background: radial-gradient(ellipse at 50% 6%, #30475f, #172343 54%, #101
 .ending-entry { padding: 14px 18px 18px; }
 .ending-entry .eyebrow { margin: 0 0 5px; }
 .ending-entry p { margin: 9px 0; font-size: 13px; line-height: 1.8; }
+.story-speaker { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px; border: 1px solid #7588a3; background: #1c2e4d; }
+.story-speaker canvas { width: 64px; height: 64px; image-rendering: pixelated; background: #304867; }
+.story-speaker strong { font-size: 13px; color: #f0d69e; }
+.story-speaker p { margin: 3px 0 0; }
+.story-navigation { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 8px; margin-top: 7px; }
+.story-navigation button { min-height: 44px; border: 1px solid #8498ae; background: #2b4264; color: #f4f1dc; }
+.story-navigation button:disabled { opacity: .48; cursor: default; }
+.story-navigation output { text-align: center; color: #d9c7a5; font-size: 12px; }
 @media (max-width: 480px) {
   .ending-art { min-height: 100px; }
   .ending-entry { padding: 11px; }
