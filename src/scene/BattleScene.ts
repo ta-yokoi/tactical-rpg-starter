@@ -639,7 +639,7 @@ export class BattleScene extends Phaser.Scene {
     this.views.clear();
     for (const unit of this.state.units) {
       const { x, y } = center(unit);
-      const shadow = this.add.ellipse(0, 5, 13, 4, 0x233641, .7);
+      const shadow = this.add.ellipse(0, 6, 14, 3, 0x18263b, .6);
       const sprite = this.add.sprite(0, -2, 'battle-art', `${unit.id}-south-idle`);
       const health = this.add.graphics();
       const body = this.add.container(x, y, [shadow, sprite, health]).setDepth(2);
@@ -651,14 +651,20 @@ export class BattleScene extends Phaser.Scene {
 
   private updateHealth(view: UnitView, unit: Unit): void {
     const bar = view.health.clear();
-    bar.fillStyle(0x20303a).fillRect(-8, 7, 16, 3);
-    bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-7, 8, Math.round(14 * unit.hp / unit.maxHp), 1);
-    bar.fillStyle(unit.team === 'blue' ? 0x8ce3e6 : 0xffab87).fillRect(-9, 4, 2, 2);
+    const ally = unit.team === 'blue';
+    const teamColor = ally ? 0x9ee9ec : 0xffb491;
+    const hp = Math.round(14 * unit.hp / unit.maxHp);
+    bar.fillStyle(0x172230).fillRect(-8, 7, 16, 3).fillRect(-10, 3, 5, 5);
+    bar.fillStyle(0x4b5161).fillRect(-7, 8, 14, 1);
+    bar.fillStyle(unit.attacked ? 0xb5aeb9 : teamColor).fillRect(-7, 8, hp, 1);
+    bar.fillStyle(teamColor);
+    if (ally) bar.fillRect(-9, 4, 3, 3);
+    else bar.fillRect(-8, 4, 1, 3).fillRect(-9, 5, 3, 1);
+    if (unit.attacked) bar.fillStyle(0x172230).fillRect(-8, 5, 1, 1);
     if (!view.sprite.anims.isPlaying) {
       const poised = unit.id === this.state.selectedId && !unit.attacked;
       view.sprite.setFrame(`${unit.id}-${view.facing}-${poised ? 'ready' : 'idle'}`);
     }
-    view.sprite.setAlpha(unit.attacked ? .74 : 1);
   }
 
   private showBanner(phase: string, title: string): void {

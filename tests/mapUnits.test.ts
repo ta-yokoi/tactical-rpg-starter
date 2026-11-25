@@ -8,6 +8,7 @@ it('keeps every character and pose in its own tile of the sprite atlas', () => {
     const orientations = new Set<string>();
     for (const facing of mapFacings) {
       const poses = new Set<string>();
+      let idleAtReadyHeight = '';
       for (const pose of mapPoses) {
         const pixels = new Map<number, string>();
         const context = {
@@ -23,8 +24,11 @@ it('keeps every character and pose in its own tile of the sprite atlas', () => {
         };
         drawMapUnit(context as CanvasRenderingContext2D, id, facing, pose);
         expect(pixels.size).toBeGreaterThan(80);
-        const image = JSON.stringify([...pixels].sort(([a], [b]) => a - b));
+        const orderedPixels = [...pixels].sort(([a], [b]) => a - b);
+        const image = JSON.stringify(orderedPixels);
         poses.add(image);
+        if (pose === 'idle') idleAtReadyHeight = JSON.stringify(orderedPixels.map(([pixel, color]) => [pixel - TILE, color]));
+        if (pose === 'ready') expect(image).not.toBe(idleAtReadyHeight);
         if (pose === 'idle') orientations.add(image);
         if (pose === 'idle' && facing === 'south') portraits.add(image);
       }

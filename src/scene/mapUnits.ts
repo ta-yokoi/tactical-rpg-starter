@@ -260,6 +260,25 @@ const rearHead: Record<UnitId, Frame> = {
   ],
 };
 
+// Columns 15–19 hold the raised weapon, staff or lantern in each unit's ready pose.
+const readyGear: Record<UnitId, Frame> = {
+  'blue-1': [
+    '.....', '.....', '....#', '...#w', '..#wc', '..#c#', '.#wc#', '.#c#.', '#g#..', '#g#..',
+  ],
+  'blue-2': [
+    '.....', '..#..', '.#g#.', '#gwg#', '.#g#.', '..#..', '..#t#', '..#t#', '..#t#', '..#t#',
+  ],
+  'blue-escort': [
+    '.....', '.....', '.....', '.##..', '#tg#.', '#gwg#', '#tgt#', '.###.', '..#t#', '..#t#',
+  ],
+  'red-1': [
+    '...##', '..#wc', '.#wcc', '.#ccc', '..#c#', '..##.', '.#t#.', '.#t#.', '.#t#.', '.#t#.',
+  ],
+  'red-2': [
+    '...#.', '..#g#', '.#gw#', '#ggg#', '.###.', '..#t#', '..#t#', '..#t#', '..#t#', '..#t#',
+  ],
+};
+
 export function drawMapUnit(context: CanvasRenderingContext2D, id: UnitId, facing: MapFacing, pose: MapPose): void {
   const colors: Palette = { ...common, ...palettes[id] };
   const north = facing === 'north';
@@ -268,7 +287,9 @@ export function drawMapUnit(context: CanvasRenderingContext2D, id: UnitId, facin
   const settle = pose === 'idle' ? 1 : 0;
   frame.forEach((frontRow, y) => {
     const rearRow = north ? rearHead[id][y] : undefined;
-    const row = rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15);
+    const equipment = pose === 'ready' ? readyGear[id][y] : undefined;
+    const body = rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15);
+    const row = equipment === undefined ? body : body.slice(0, 15).padEnd(15, '.') + equipment;
     for (let x = 0; x < row.length; x++) {
       const symbol = row[x];
       if (symbol === '.') continue;
