@@ -6,7 +6,7 @@ import { formationBonuses } from '../game/formation';
 import { enemyTurnSteps } from '../game/ai';
 import { attackRange, battleProfile, combatForecast, handleTile, initialState, movementPath, movementRange, onBoard, reduceGame, terrainAt, type GameState, type Point, type Strike, type Unit } from '../game/rules';
 import { unitProfile } from '../game/units';
-import { center, MARGIN, TILE } from './board';
+import { center, HEIGHT, MARGIN, TILE, WIDTH } from './board';
 import { createPixelArt } from './pixelArt';
 import type { MapFacing } from './mapUnits';
 import { CombatStage, duelTiming } from './CombatStage';
@@ -68,15 +68,26 @@ export class BattleScene extends Phaser.Scene {
     this.marks = this.add.graphics();
     this.cursorLayer = this.add.graphics().setDepth(3);
     const board = element('game');
-    const pointerTile = (pointer: Phaser.Input.Pointer): Point => ({
-      x: Math.floor((pointer.x - MARGIN) / TILE),
-      y: Math.floor((pointer.y - MARGIN) / TILE),
-    });
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.setCursor(pointerTile(pointer)));
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+    const canvas = this.game.canvas;
+    const pointerTile = (pointer: PointerEvent): Point => {
+      const bounds = canvas.getBoundingClientRect();
+      return {
+        x: Math.floor(((pointer.clientX - bounds.left) * WIDTH / bounds.width - MARGIN) / TILE),
+        y: Math.floor(((pointer.clientY - bounds.top) * HEIGHT / bounds.height - MARGIN) / TILE),
+      };
+    };
+    const hoverTile = (pointer: PointerEvent): void => this.setCursor(pointerTile(pointer));
+    const useTile = (pointer: PointerEvent): void => {
+      if (!pointer.isPrimary || pointer.button !== 0) return;
       const point = pointerTile(pointer);
       this.setCursor(point);
       if (onBoard(this.state, point)) void this.playerTile(point);
+    };
+    canvas.addEventListener('pointermove', hoverTile);
+    canvas.addEventListener('pointerup', useTile);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      canvas.removeEventListener('pointermove', hoverTile);
+      canvas.removeEventListener('pointerup', useTile);
     });
     board.addEventListener('pointerleave', () => this.setCursor(null));
     board.addEventListener('blur', () => this.setCursor(null));

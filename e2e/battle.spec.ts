@@ -42,6 +42,7 @@ test('play the opening campaign from chapter one through the watchtower', async 
     await ready();
   };
   const tile = async (x: number, y: number): Promise<void> => {
+    await page.locator('#game canvas').scrollIntoViewIfNeeded();
     await page.mouse.click(...await tilePosition(page, x, y));
     await ready();
   };
@@ -228,12 +229,14 @@ test('play the opening campaign from chapter one through the watchtower', async 
     const order = async (id: string, x: number, y: number, targetId?: string): Promise<void> => {
       const unit = (await state()).units.find(item => item.id === id)!;
       await tile(unit.x, unit.y);
+      await expect.poll(async () => (await state()).selectedId).toBe(id);
       if (unit.x !== x || unit.y !== y) await tile(x, y);
       expect((await state()).units.find(item => item.id === id)).toMatchObject({ x, y });
       if (!targetId) return;
       const target = (await state()).units.find(item => item.id === targetId)!;
       await tile(target.x, target.y);
       const attackDialog = page.getByRole('dialog', { name: '戦闘予告' });
+      await expect(attackDialog).toBeVisible();
       const chapterId = (await state()).chapterId;
       const cometDuel = chapterId === 2 && id === 'blue-2' && targetId === 'red-2';
       const shieldDuel = chapterId === 3 && id === 'blue-1' && targetId === 'red-1';
@@ -304,11 +307,14 @@ test('play the opening campaign from chapter one through the watchtower', async 
     expect((await state()).winner).toBeNull();
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
     await page.screenshot({ path: testInfo.outputPath('finale-last-stand.png'), fullPage: true });
+    const desktopZoom = await page.locator('#game').getAttribute('data-zoom');
+    expect(desktopZoom).toBeTruthy();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator('#hold-status')).toBeInViewport();
     await expect(page.locator('#hold-progress')).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath('finale-mobile.png') });
     await page.setViewportSize(desktopSize);
+    await expect(page.locator('#game')).toHaveAttribute('data-zoom', desktopZoom!);
     await order('blue-2', 3, 4, 'red-2');
     await enemyPhase();
     await expect(page.getByRole('heading', { name: '見張り台を守り抜いた！' })).toBeVisible();
