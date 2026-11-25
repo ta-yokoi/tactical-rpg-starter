@@ -1,6 +1,6 @@
 import { pixelPainter } from './pixelPainter';
 
-export type ArenaGround = 'road' | 'wood' | 'meadow';
+export type ArenaGround = 'road' | 'wood' | 'meadow' | 'courtyard';
 
 export function combatBackdrop(ground: ArenaGround): string {
   const canvas = document.createElement('canvas');
@@ -24,7 +24,23 @@ export function combatBackdrop(ground: ArenaGround): string {
     s('#344f53', [x - 3, 93], [x + 2, y], [x + 7, 93]);
     s('#496865', [x, 90], [x + 2, y + 2], [x + 4, 90]);
   }
-  if (ground === 'wood') {
+  if (ground === 'courtyard') {
+    p(0, 76, 240, 23, '#505869');
+    for (let x = 0; x < 240; x += 20) {
+      p(x, 68, 11, 10, '#505869');
+      p(x, 68, 11, 2, '#899294');
+      p(x + 1, 81, 18, 3, '#677181');
+      p(x + 6, 87, 12, 3, '#677181');
+    }
+    p(0, 97, 240, 23, '#889093');
+    for (let y = 98; y < 120; y += 7) {
+      p(0, y, 240, 1, '#5f6b78');
+      for (let x = y % 2 ? 8 : 15; x < 240; x += 21) {
+        p(x, y + 1, 1, 6, '#6d7881');
+        p(x + 1, y + 1, 17, 1, '#a7aaa2');
+      }
+    }
+  } else if (ground === 'wood') {
     p(0, 87, 240, 13, '#527893');
     for (let x = 4; x < 240; x += 27) p(x, 89 + x % 5, 13, 1, '#8db2b6');
     p(0, 96, 240, 24, '#7d604e');

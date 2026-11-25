@@ -18,7 +18,7 @@
         <div class="chapter-seal" aria-hidden="true"><span id="chapter-number">01</span></div>
       </header>
 
-      <div class="mission-strip"><span class="diamond" aria-hidden="true">◆</span><strong>勝利条件</strong><span id="mission-objective">敵部隊を全滅させる</span><span id="hold-progress" class="hold-progress" hidden role="status"></span><span id="hold-status" class="hold-status" hidden></span><span id="checkpoint-status" class="mission-note" role="status"></span></div>
+      <div class="mission-strip"><span class="diamond" aria-hidden="true">◆</span><strong>勝利条件</strong><span id="mission-objective">敵部隊を全滅させる</span><span id="capture-progress" class="hold-progress" hidden role="status"></span><span id="hold-progress" class="hold-progress" hidden role="status"></span><span id="hold-status" class="hold-status" hidden></span><span id="checkpoint-status" class="mission-note" role="status"></span></div>
       <section class="game-layout" aria-label="戦闘画面">
         <div class="battle-frame">
           <div class="battle-topline"><span id="district">古い峠</span><span id="turn-label">第1ターン ／ 味方フェイズ</span></div>
@@ -63,12 +63,10 @@
       <dialog id="ending-dialog" class="attack-dialog ending-dialog" aria-labelledby="ending-heading">
         <div class="ending-art"></div>
         <div class="ending-entry">
-          <p class="eyebrow">全3章クリア</p>
-          <h2 id="ending-heading">境界に灯がともる</h2>
-          <p>尾根の火を見て、ナギも川辺の灯を掲げた。二つの明かりは夜の底で応え合い、旅人たちに帰り道を知らせた。</p>
-          <p>「これで、朝の舟を出せるな」</p>
-          <p>アステルが剣を収めると、リナは朝の光へ杖をかざした。峠を越えてきた人々の足音が、静かな渡し場に戻ってきた。</p>
-          <form method="dialog"><button value="cancel">戦果に戻る</button><button value="title" class="primary-button">タイトルへ</button></form>
+          <p id="story-chapter" class="eyebrow"></p>
+          <h2 id="ending-heading"></h2>
+          <div id="story-copy"></div>
+          <form method="dialog"><button value="cancel">戦果に戻る</button><button id="story-advance" value="advance" class="primary-button" hidden></button><button id="story-title" value="title" class="primary-button" hidden>タイトルへ</button></form>
         </div>
       </dialog>
       <dialog id="formation-dialog" class="attack-dialog formation-dialog" aria-labelledby="formation-heading">
@@ -103,7 +101,7 @@
     <dialog id="title-dialog" class="attack-dialog title-dialog" aria-labelledby="title-heading">
       <div class="title-landscape">
         <h2 id="title-heading">蒼の境界</h2>
-        <p>峠を守り、川を渡り、夜明けの灯をともす。</p>
+        <p>峠を守り、川を渡り、水路をひらく。</p>
       </div>
       <div class="title-menu">
         <div id="title-options">

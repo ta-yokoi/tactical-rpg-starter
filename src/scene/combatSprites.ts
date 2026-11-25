@@ -12,6 +12,7 @@ type Palette = {
   skin: readonly [string, string, string];
   accent: string;
   gem: string;
+  headgear?: 'visor' | 'crown';
 };
 
 const gear: Record<string, Palette> = {
@@ -25,6 +26,14 @@ const gear: Record<string, Palette> = {
     hair: ['#413244', '#7c626e', '#b79aa0'], skin: ['#a46865', '#d49881', '#efd0a8'], accent: '#eac17c', gem: '#ff9376' },
   'blue-escort': { kit: 'ferryman', cloth: ['#234a47', '#43796a', '#75ad89', '#c4d59b'],
     hair: ['#3e3235', '#685043', '#997657'], skin: ['#94624b', '#c38b61', '#f0bc86'], accent: '#efc481', gem: '#fbe187' },
+  'blue-3': { kit: 'knight', cloth: ['#203c45', '#327a78', '#58b19b', '#c5e6bc'],
+    hair: ['#27282f', '#46393b', '#695356'], skin: ['#8b554f', '#be8067', '#ebae82'], accent: '#edcb76', gem: '#bfe6bf', headgear: 'visor' },
+  'blue-4': { kit: 'star', cloth: ['#51402e', '#9c7041', '#d4a35b', '#f1cd8e'],
+    hair: ['#2a3443', '#394959', '#637883'], skin: ['#995e52', '#cc926f', '#f0bb93'], accent: '#9cdded', gem: '#80d7ed' },
+  'red-3': { kit: 'raider', cloth: ['#433844', '#7e5560', '#b88270', '#e7b294'],
+    hair: ['#392b38', '#514047', '#74636b'], skin: ['#8b5245', '#bd7964', '#dea28a'], accent: '#e18b58', gem: '#ffb682', headgear: 'visor' },
+  'red-4': { kit: 'knight', cloth: ['#342340', '#6a365a', '#ac5274', '#e799a6'],
+    hair: ['#3d2939', '#604358', '#7d6075'], skin: ['#8e5667', '#c48784', '#e9b4a0'], accent: '#f4bc64', gem: '#ffa786', headgear: 'crown' },
 };
 
 const ink = '#201e30';
@@ -178,8 +187,10 @@ function paintHead({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x,
   p(24 + x, 10 + y, 7, 2, hair); p(23 + x, 12 + y, 5, 1, hairLight);
 
   if (palette.kit === 'knight') {
-    s(ink, [23 + x, 10 + y], [23 + x, 6 + y], [29 + x, 2 + y], [31 + x, 5 + y], [29 + x, 9 + y]);
-    s(light, [25 + x, 8 + y], [25 + x, 6 + y], [29 + x, 3 + y], [30 + x, 5 + y], [28 + x, 8 + y]);
+    if (palette.headgear !== 'crown') {
+      s(ink, [23 + x, 10 + y], [23 + x, 6 + y], [29 + x, 2 + y], [31 + x, 5 + y], [29 + x, 9 + y]);
+      s(light, [25 + x, 8 + y], [25 + x, 6 + y], [29 + x, 3 + y], [30 + x, 5 + y], [28 + x, 8 + y]);
+    }
     s(deep, [17 + x, 15 + y], [20 + x, 8 + y], [25 + x, 5 + y], [32 + x, 6 + y],
       [36 + x, 10 + y], [34 + x, 13 + y], [28 + x, 12 + y], [23 + x, 15 + y], [20 + x, 19 + y]);
     s(main, [18 + x, 14 + y], [21 + x, 9 + y], [25 + x, 6 + y], [32 + x, 7 + y], [34 + x, 10 + y],
@@ -227,6 +238,17 @@ function paintHead({ palette, pose, painter: { pixel: p, shape: s }, anchor: [x,
     p(26 + x, 4 + y, 4, 1, main);
     s(mid, [30 + x, 21 + y], [37 + x, 19 + y], [35 + x, 24 + y], [30 + x, 25 + y], [25 + x, 24 + y]);
     p(31 + x, 22 + y, 3, 1, main);
+  }
+  if (palette.headgear === 'visor') {
+    s(ink, [22 + x, 12 + y], [35 + x, 12 + y], [37 + x, 18 + y], [34 + x, 22 + y], [25 + x, 20 + y]);
+    s(main, [23 + x, 13 + y], [34 + x, 13 + y], [36 + x, 18 + y], [33 + x, 21 + y], [26 + x, 19 + y]);
+    p(26 + x, 15 + y, 8, 1, light); p(29 + x, 17 + y, 5, 1, deep);
+  } else if (palette.headgear === 'crown') {
+    s(ink, [19 + x, 11 + y], [19 + x, 3 + y], [24 + x, 7 + y], [29 + x, 2 + y],
+      [33 + x, 7 + y], [37 + x, 4 + y], [35 + x, 12 + y]);
+    s(palette.accent, [20 + x, 10 + y], [20 + x, 5 + y], [24 + x, 8 + y], [29 + x, 4 + y],
+      [33 + x, 8 + y], [35 + x, 6 + y], [34 + x, 11 + y]);
+    p(29 + x, 8 + y, 2, 2, main);
   }
 }
 

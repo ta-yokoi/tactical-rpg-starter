@@ -6,7 +6,8 @@ const distance = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(
 /** A deterministic opponent. Each returned state is one visible action. */
 export function enemyTurnSteps(start: GameState): GameState[] {
   if (start.turn !== 'red' || start.winner) return [];
-  const { escort, hold } = chapter(start.chapterId);
+  const { escort, hold, capture } = chapter(start.chapterId);
+  const objectives = hold ? [hold.point] : capture;
   const steps: GameState[] = [];
   let state = start;
   const apply = (action: Action): void => {
@@ -25,9 +26,9 @@ export function enemyTurnSteps(start: GameState): GameState[] {
       const forecast = combatForecast(state, id, hero.id, point);
       if (!forecast) return [];
       const { opening, counter } = forecast;
-      const towerGuard = hold && distance(hero, hold.point) === 0;
-      const objectiveScore = towerGuard ? (opening.remainingHp === 0 ? 18 : 6)
-        : hold && distance(point, hold.point) === 0 ? 8 : 0;
+      const objectiveGuard = objectives?.some(target => distance(hero, target) === 0);
+      const objectiveScore = objectiveGuard ? (opening.remainingHp === 0 ? 18 : 6)
+        : objectives?.some(target => distance(point, target) === 0) ? 8 : 0;
       const score = 3 * Math.min(hero.hp, opening.damage) - 2 * (counter?.damage ?? 0) +
         (opening.remainingHp === 0 ? 12 : 0) + (hero.id === escort?.id ? 3 : 0) -
         (counter?.remainingHp === 0 ? 16 : 0) + objectiveScore;
@@ -35,7 +36,7 @@ export function enemyTurnSteps(start: GameState): GameState[] {
     }));
     const best = attacks.sort((a, b) => b.score - a.score ||
       distance(a.point, enemy) - distance(b.point, enemy))[0];
-    const approach = hold ? [hold.point] : heroes;
+    const approach = objectives ?? heroes;
     const position = best?.point ?? options.sort((a, b) =>
       nearest(a, approach) - nearest(b, approach) || terrainAt(state, b).cover - terrainAt(state, a).cover ||
       distance(a, enemy) - distance(b, enemy))[0];
@@ -47,6 +48,6 @@ export function enemyTurnSteps(start: GameState): GameState[] {
   return steps;
 }
 
-function nearest(point: Point, targets: Point[]): number {
+function nearest(point: Point, targets: readonly Point[]): number {
   return Math.min(...targets.map(target => distance(point, target)));
 }

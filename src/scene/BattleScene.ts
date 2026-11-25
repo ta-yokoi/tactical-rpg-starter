@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Chiptune } from '../audio/chiptune';
-import { chapter, type ChapterId } from '../game/chapters';
+import { chapter, lastChapter, nextChapter, type ChapterId } from '../game/chapters';
 import { loadCheckpoint, saveCheckpoint } from '../game/checkpoint';
 import { formationBonuses } from '../game/formation';
 import { enemyTurnSteps } from '../game/ai';
@@ -19,6 +19,8 @@ const button = (id: string): HTMLButtonElement => document.querySelector<HTMLBut
 const same = (a: Point, b: Point): boolean => a.x === b.x && a.y === b.y;
 const strikeName = (unit: Unit): string => unitProfile(unit.id).reach === 1 ? '斬撃' : '術撃';
 const soundPreferenceKey = 'tactical-rpg-starter:sound';
+const chapterLabel = (id: ChapterId): string => id === lastChapter ? '終章' : `第${id}章`;
+const campaignClear = `全${lastChapter}章クリア`;
 
 type UnitView = {
   body: Phaser.GameObjects.Container;
@@ -98,19 +100,23 @@ export class BattleScene extends Phaser.Scene {
     }, () => {
       if (canPrepare()) this.startChapter(2);
     });
-    button('next-chapter').addEventListener('click', () => {
-      if (canPrepare()) formationDialog.open(this.state.formation);
-      else if (!this.busy && this.state.chapterId === 2 && this.state.winner === 'blue') this.startChapter(3);
-    });
     const endingDialog = document.querySelector<HTMLDialogElement>('#ending-dialog')!;
+    button('next-chapter').addEventListener('click', () => {
+      if (this.busy || this.state.winner !== 'blue') return;
+      const next = nextChapter(this.state.chapterId);
+      if (canPrepare()) formationDialog.open(this.state.formation);
+      else if (next && chapter(this.state.chapterId).aftermath) this.openStory(endingDialog);
+      else if (next) this.startChapter(next);
+    });
     button('show-ending').addEventListener('click', () => {
-      if (!this.busy && this.state.chapterId === 3 && this.state.winner === 'blue') {
-        endingDialog.returnValue = '';
-        endingDialog.showModal();
+      if (!this.busy && this.state.chapterId === lastChapter && this.state.winner === 'blue') {
+        this.openStory(endingDialog);
       }
     });
     endingDialog.addEventListener('close', () => {
       if (endingDialog.returnValue === 'title') this.openTitle();
+      const next = nextChapter(this.state.chapterId);
+      if (endingDialog.returnValue === 'advance' && this.state.winner === 'blue' && next) this.startChapter(next);
     });
     this.titleDialog.addEventListener('cancel', event => {
       event.preventDefault();
@@ -190,15 +196,34 @@ export class BattleScene extends Phaser.Scene {
     const resume = button('continue-game');
     resume.disabled = !this.hasProgress;
     const mission = chapter(this.state.chapterId);
-    const cleared = this.state.chapterId === 3 && this.state.winner === 'blue';
-    const number = this.state.chapterId === 3 ? '終章' : `第${this.state.chapterId}章`;
+    const cleared = this.state.chapterId === lastChapter && this.state.winner === 'blue';
+    const number = chapterLabel(this.state.chapterId);
     element('title-checkpoint').textContent = this.hasProgress
-      ? cleared ? '全3章クリア · エンディングを再読できます' : `${number} · ${mission.title}`
+      ? cleared ? `${campaignClear} · エンディングを再読できます` : `${number} · ${mission.title}`
       : '保存データはありません';
     element('title-options').hidden = false;
     element('new-game-confirmation').hidden = true;
     this.titleDialog.showModal();
     (resume.disabled ? button('new-game') : resume).focus();
+  }
+
+  private openStory(dialog: HTMLDialogElement): void {
+    const story = chapter(this.state.chapterId).aftermath;
+    if (!story) return;
+    const next = nextChapter(this.state.chapterId);
+    element('story-chapter').textContent = next ? `${chapterLabel(this.state.chapterId)}クリア` : campaignClear;
+    element('ending-heading').textContent = story.title;
+    element('story-copy').replaceChildren(...story.paragraphs.map(line => {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = line;
+      return paragraph;
+    }));
+    const advance = button('story-advance');
+    advance.hidden = !next;
+    advance.textContent = next ? `${chapterLabel(next)}に出撃する →` : '';
+    button('story-title').hidden = Boolean(next);
+    dialog.returnValue = '';
+    dialog.showModal();
   }
 
   private showNewGameConfirmation(show: boolean): void {
@@ -417,7 +442,7 @@ export class BattleScene extends Phaser.Scene {
     const { chapterId } = this.state;
     const mission = chapter(chapterId);
     document.querySelector('main')!.dataset.chapter = String(chapterId);
-    element('chapter-label').textContent = chapterId === 3 ? '終章' : `第${chapterId}章`;
+    element('chapter-label').textContent = chapterLabel(chapterId);
     element('chapter-number').textContent = String(chapterId).padStart(2, '0');
     element('seal-title').textContent = mission.title;
     element('briefing').textContent = mission.briefing;
@@ -429,7 +454,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private showChapterBanner(): void {
-    this.showBanner(this.state.chapterId === 3 ? '終章' : `第${this.state.chapterId}章`, chapter(this.state.chapterId).title);
+    this.showBanner(chapterLabel(this.state.chapterId), chapter(this.state.chapterId).title);
   }
 
   private focusOutcome(): void {
@@ -440,7 +465,7 @@ export class BattleScene extends Phaser.Scene {
 
   private drawUi(): void {
     this.marks.clear();
-    const objective = chapter(this.state.chapterId).hold;
+    const mission = chapter(this.state.chapterId);
     const selected = this.state.units.find(unit => unit.id === this.state.selectedId);
     let canAttack = false;
     if (selected && !this.state.winner) {
@@ -465,7 +490,10 @@ export class BattleScene extends Phaser.Scene {
       const { x, y } = center(selected);
       this.marks.lineStyle(1, 0xffe295).strokeRect(x - 9, y - 9, 18, 18);
     }
-    this.drawHoldStatus(objective?.point);
+    this.drawHoldStatus(mission.hold?.point);
+    this.drawCaptureStatus(mission.capture);
+    const commanderUnit = this.state.units.find(unit => unit.id === mission.commander);
+    if (commanderUnit && !this.state.winner) this.markCorners(this.marks, center(commanderUnit), 9, 0xffd785);
     if (!this.busy || this.state.turn === 'red') this.drawFieldGuide(selected, canAttack);
     this.drawCursor();
     const phase = this.state.turn === 'blue' ? '味方フェイズ' : '敵フェイズ';
@@ -480,8 +508,8 @@ export class BattleScene extends Phaser.Scene {
     const profile = selected && battleProfile(this.state, selected.id);
     element('selected-detail').textContent = selected && profile
       ? `${profile.role} · HP ${selected.hp}/${selected.maxHp} · ${selected.attacked ? '行動済み' : selected.moved ? profile.reach === 0 ? '移動済み' : '攻撃可' : '行動可'}`
-      : '騎士は隣接、星詠みは2マス先まで攻撃できます。';
-    const loadout = selected && this.state.chapterId !== 1 ? formationBonuses(selected.id, this.state.formation).equipment : '';
+      : '剣と斧は隣接、術は2マス先まで攻撃できます。';
+    const loadout = selected && this.state.chapterId !== 1 ? this.combatGear(selected) : '';
     element('selected-equipment').textContent = loadout ? `装備　${loadout}` : '';
     element('selected-stats').textContent = profile?.reach === 0
       ? `移動 ${profile.movement}　守備 ${profile.defense}　耐術 ${profile.ward}　攻撃不可` : profile
@@ -510,26 +538,45 @@ export class BattleScene extends Phaser.Scene {
     button('return-title').disabled = this.busy;
     const finished = !this.busy && this.state.winner !== null;
     const won = finished && this.state.winner === 'blue';
-    const { escort, hold } = chapter(this.state.chapterId);
+    const { escort, hold, capture, commander } = mission;
     element('outcome').hidden = !finished;
     const next = button('next-chapter');
-    next.hidden = !won || Boolean(hold);
-    next.textContent = escort ? '終章へ進む →' : '編成へ進む →';
+    const destination = nextChapter(this.state.chapterId);
+    next.hidden = !won || !destination;
+    next.textContent = this.state.chapterId === 1 ? '編成へ進む →'
+      : destination ? `${chapterLabel(destination)}へ進む →` : '';
     const ending = button('show-ending');
-    ending.hidden = !won || !hold;
-    button('replay-campaign').hidden = !won || !hold;
+    ending.hidden = !won || Boolean(destination);
+    button('replay-campaign').hidden = !won || Boolean(destination);
     button('restart-outcome').classList.toggle('secondary', !next.hidden || !ending.hidden);
     button('replay-campaign').classList.add('secondary');
     if (this.state.winner) {
       element('outcome').dataset.result = this.state.winner;
       const win = this.state.winner === 'blue';
       element('outcome-heading').textContent = win
-        ? hold ? '見張り台を守り抜いた！' : escort ? '護衛成功！' : '戦いに勝利！'
+        ? hold ? '見張り台を守り抜いた！' : escort ? '護衛成功！' : capture ? '水門が開いた！'
+          : commander ? '観潮砦を奪還した！' : '戦いに勝利！'
         : escort ? '護衛失敗' : hold ? '見張り台は陥落した' : '部隊は敗走した';
       element('outcome-copy').textContent = win
-        ? hold ? '尾根の火が夜明けを告げた。' : escort ? 'ナギが灯火台に到着した。尾根の見張り台へ向かおう。' : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
+        ? hold ? '尾根の火が夜明けを告げた。' : escort ? 'ナギが灯火台に到着した。尾根の見張り台へ向かおう。'
+          : capture ? '二つの制御台を確保し、下流へ水を送り出した。' : commander ? '監潮官が退き、村に水の流れが戻った。'
+            : '峠を守り抜いた。次は東岸までナギを送り届けよう。'
         : escort ? 'ナギを守りきれなかった。' : 'もう一度、陣形を整えて挑もう。';
     }
+  }
+
+  private drawCaptureStatus(points: readonly Point[] | undefined): void {
+    const progress = element('capture-progress');
+    progress.hidden = !points;
+    if (!points) return;
+    let secured = 0;
+    for (const point of points) {
+      const owner = this.state.units.find(unit => same(unit, point))?.team;
+      if (owner === 'blue') secured++;
+      if (!this.state.winner) this.markCorners(this.marks, center(point), 9, owner === 'blue' ? 0x94eded : owner === 'red' ? 0xff997e : 0xffd785);
+    }
+    const text = `確保 ${secured} / ${points.length}`;
+    if (progress.textContent !== text) progress.textContent = text;
   }
 
   private drawHoldStatus(point: Point | undefined): void {
@@ -571,7 +618,7 @@ export class BattleScene extends Phaser.Scene {
     if (source && hit) {
       const forecast = combatForecast(previous, source.id, hit.id)!;
       const terrain = [terrainAt(previous, source).frame, terrainAt(previous, hit).frame];
-      const ground: ArenaGround = terrain.includes('bridge') ? 'wood'
+      const ground: ArenaGround = terrain.includes('paving') ? 'courtyard' : terrain.includes('bridge') ? 'wood'
         : terrain.some(tile => ['horizontal', 'north', 'south', 'vertical'].includes(tile)) ? 'road' : 'meadow';
       const formation = this.state.chapterId === 1 ? undefined : this.state.formation;
       this.combatStage.open(source, hit, ground, unit => this.combatGear(unit), formation);
@@ -616,6 +663,10 @@ export class BattleScene extends Phaser.Scene {
     if (!role.reach) return '渡し守の杖';
     if (unit.id === 'blue-1') return '峠の剣';
     if (unit.id === 'blue-2') return '星詠みの杖';
+    if (unit.id === 'blue-3') return '水門の盾';
+    if (unit.id === 'blue-4') return '潮目の杖';
+    if (unit.id === 'red-3') return '鎖番の斧';
+    if (unit.id === 'red-4') return '潮封じの剣';
     return role.style === 'blade' ? '鉄牙の斧' : '灰火の杖';
   }
 

@@ -18,7 +18,7 @@ export function decodeCheckpoint(raw: string): GameState | null {
   try {
     const saved: unknown = JSON.parse(raw);
     if (!record(saved) || (saved.version !== 1 && saved.version !== 2 && saved.version !== 3 && saved.version !== 4) ||
-        !isChapterId(saved.chapterId) || ((saved.version === 1 || saved.version === 2) && saved.chapterId === 3)) return null;
+        !isChapterId(saved.chapterId) || (saved.version !== 4 && saved.chapterId > (saved.version === 3 ? 3 : 2))) return null;
     const formation = saved.version === 1 ? defaultFormation : readFormation(saved.formation);
     if (!formation) return null;
     const state = initialState(saved.chapterId, formation);

@@ -18,8 +18,8 @@
 [hidden] { display: none !important; }
 body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 65% 3%, #203548, #0e1b29 50%, #0b1420 86%); }
 main { --landscape: url('./art/pass.webp'); max-width: 1264px; margin: 0 auto; padding: 22px 24px 36px; }
-main[data-chapter="2"] { --landscape: url('./art/river.webp'); }
-main[data-chapter="3"] { --landscape: url('./art/watchtower.webp'); }
+main:is([data-chapter="2"], [data-chapter="4"]) { --landscape: url('./art/river.webp'); }
+main:is([data-chapter="3"], [data-chapter="5"]) { --landscape: url('./art/watchtower.webp'); }
 .masthead {
   position: relative;
   display: flex;

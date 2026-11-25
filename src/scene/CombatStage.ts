@@ -13,7 +13,7 @@ const anticipation: Record<Motion, readonly number[]> = {
   spell: [112, 137, 86],
 };
 const poses = ['windup', 'advance', 'release'] as const;
-export const duelGroundLabels = { road: '古道', wood: '川辺の橋', meadow: '草地' } as const;
+export const duelGroundLabels = { road: '古道', wood: '川辺の橋', meadow: '草地', courtyard: '砦の石畳' } as const;
 
 type Fighter = { unit: Unit; actor: HTMLElement; card: HTMLElement; equipment: CombatEquipment };
 
@@ -60,7 +60,7 @@ export class CombatStage {
   async windup(strike: Strike, counter: boolean): Promise<void> {
     const attacker = this.find(strike.attackerId);
     const style = unitProfile(strike.attackerId).style;
-    const motion = style === 'spell' ? 'spell' : strike.attackerId === 'red-1' ? 'axe' : 'sword';
+    const motion = style === 'spell' ? 'spell' : ['red-1', 'red-3'].includes(strike.attackerId) ? 'axe' : 'sword';
     for (const fighter of this.fighters) {
       fighter.actor.querySelector('.duel-damage')!.textContent = '';
     }

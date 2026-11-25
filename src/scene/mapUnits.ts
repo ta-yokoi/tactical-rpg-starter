@@ -6,6 +6,10 @@ const palettes = {
   'blue-escort': { d: '#234a47', m: '#43796a', l: '#75ad89', a: '#c4d59b', w: '#ffedb7', g: '#ffc66b', t: '#ae773e' },
   'red-1': { d: '#4e283d', m: '#954a50', l: '#da775f', a: '#ffbd86', w: '#f3eee0', g: '#e8a366', t: '#935641' },
   'red-2': { d: '#412642', m: '#79394f', l: '#b8596c', a: '#e48987', w: '#ffe9c4', g: '#ff9d61', t: '#9f553f' },
+  'blue-3': { d: '#203c45', m: '#327a78', l: '#58b19b', a: '#c5e6bc', w: '#f6eed5', g: '#edcb76', t: '#9b744b' },
+  'blue-4': { d: '#51402e', m: '#9c7041', l: '#d4a35b', a: '#f1cd8e', w: '#ffe7b5', g: '#9cdded', t: '#88614c' },
+  'red-3': { d: '#433844', m: '#7e5560', l: '#b88270', a: '#e7b294', w: '#f3e1c9', g: '#e18b58', t: '#7c5a49' },
+  'red-4': { d: '#342340', m: '#6a365a', l: '#ac5274', a: '#e799a6', w: '#f9dfae', g: '#f4bc64', t: '#82495b' },
 } as const;
 
 export const mapUnitIds = Object.keys(palettes) as (keyof typeof palettes)[];
@@ -16,12 +20,15 @@ export const mapWalkCycle = ['step-a', 'pass', 'step-b', 'pass'] as const;
 type MapPose = typeof mapPoses[number];
 
 type UnitId = keyof typeof palettes;
+const recruits = { 'blue-3': 'blue-1', 'blue-4': 'blue-2', 'red-3': 'red-1', 'red-4': 'blue-1' } as const;
+type Recruit = keyof typeof recruits;
+type BaseId = Exclude<UnitId, Recruit>;
 type Frame = readonly string[];
 type Palette = Record<string, string>;
 const common = { '#': '#222535', s: '#efb58f', h: '#b37660', c: '#849bad' };
 
 // The shared palette keeps the underlit side cool and the light-facing edges warm.
-const front: Record<UnitId, Frame> = {
+const front: Record<BaseId, Frame> = {
   'blue-1': [
     '........#a#',
     '......##aa##......#',
@@ -129,7 +136,7 @@ const front: Record<UnitId, Frame> = {
   ],
 };
 
-const profile: Record<UnitId, Frame> = {
+const profile: Record<BaseId, Frame> = {
   'blue-1': [
     '........#a#',
     '......##aa##......#',
@@ -238,7 +245,7 @@ const profile: Record<UnitId, Frame> = {
 };
 
 // Rear views replace the eyes and front-facing headgear with hair, plate or fabric.
-const rearHead: Record<UnitId, Frame> = {
+const rearHead: Record<BaseId, Frame> = {
   'blue-1': [
     '........#a#', '......##aa##', '.....#laawld#', '.....#lmdald#',
     '.....#lmdmdd#', '......#lmdm#', '.....#m#dd#m#',
@@ -262,7 +269,7 @@ const rearHead: Record<UnitId, Frame> = {
 };
 
 // Columns 15–19 hold the raised weapon, staff or lantern in each unit's ready pose.
-const readyGear: Record<UnitId, Frame> = {
+const readyGear: Record<BaseId, Frame> = {
   'blue-1': [
     '.....', '.....', '....#', '...#w', '..#wc', '..#c#', '.#wc#', '.#c#.', '#g#..', '#g#..',
   ],
@@ -281,7 +288,7 @@ const readyGear: Record<UnitId, Frame> = {
 };
 
 // Travel gear sits close to the body before joining the base frame at the hand.
-const walkingGear: Record<UnitId, Frame> = {
+const walkingGear: Record<BaseId, Frame> = {
   'blue-1': [
     '.....', '.....', '.....', '.....', '....#', '...#w', '...#c', '..#wc',
   ],
@@ -299,16 +306,27 @@ const walkingGear: Record<UnitId, Frame> = {
   ],
 };
 
+const helmets: Record<Recruit, Frame> = {
+  'blue-3': ['.......#g#', '......#aga#', '.....#laaal#', '.....#amcma#', '.....#mcccm#'],
+  'blue-4': ['........##', '......##ag##', '.....#waaaml#', '.....#almssm#', '....#alm#ssml#'],
+  'red-3': ['......#..#', '.....#g##g#', '.....#lmmmld#', '.....#mlclmd#', '.....#cccch#'],
+  'red-4': ['......#.#.#', '......#g#g#', '.....#ggggld#', '.....#lmcmd#', '.....#adssdd#'],
+};
+
 export function drawMapUnit(context: CanvasRenderingContext2D, id: UnitId, facing: MapFacing, pose: MapPose): void {
   const colors: Palette = { ...common, ...palettes[id] };
   const north = facing === 'north';
-  const frame = facing === 'side' ? profile[id] : front[id];
+  const recruit = Object.hasOwn(recruits, id) ? id as Recruit : undefined;
+  const base = recruit ? recruits[recruit] : id as BaseId;
+  const frame = facing === 'side' ? profile[base] : front[base];
   const step = pose === 'step-a' ? -1 : pose === 'step-b' ? 1 : 0;
   const passing = pose === 'pass';
   const settle = pose === 'idle' || passing ? 1 : 0;
-  const equipmentFrames = pose === 'ready' ? readyGear[id] : step || passing ? walkingGear[id] : undefined;
+  const equipmentFrames = pose === 'ready' ? readyGear[base] : step || passing ? walkingGear[base] : undefined;
   frame.forEach((frontRow, y) => {
-    const rearRow = north ? rearHead[id][y] : undefined;
+    const newHelmet = recruit && helmets[recruit][y];
+    const head = north ? rearHead[base][y] : newHelmet;
+    const rearRow = north && y <= 2 && newHelmet ? newHelmet : head;
     const equipment = equipmentFrames?.[y];
     const body = rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15);
     const row = equipment === undefined ? body : body.slice(0, 15).padEnd(15, '.') + equipment;

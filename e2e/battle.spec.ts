@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { center, WIDTH, HEIGHT } from '../src/scene/board';
-import { combatForecast, type GameState } from '../src/game/rules';
+import { checkpointKey, encodeCheckpoint } from '../src/game/checkpoint';
+import { combatForecast, initialState, type GameState } from '../src/game/rules';
 
 async function tilePosition(page: Page, x: number, y: number): Promise<[number, number]> {
   const bounds = await page.locator('#game canvas').boundingBox();
@@ -18,7 +19,7 @@ async function reloadCampaign(page: Page): Promise<void> {
   await continueGame(page).click();
 }
 
-test('play the campaign from chapter one through the ending', async ({ page }, testInfo) => {
+test('play the opening campaign from chapter one through the watchtower', async ({ page }, testInfo) => {
   test.setTimeout(210_000);
   const errors: string[] = [];
   const loadedArt = new Set<string>();
@@ -280,8 +281,8 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await page.screenshot({ path: testInfo.outputPath('escort-victory.png'), fullPage: true });
     await reloadCampaign(page);
     await expect(page.getByRole('heading', { name: '護衛成功！' })).toBeVisible();
-    await page.getByRole('button', { name: /終章へ進む/ }).click();
-    await expect(page.locator('#chapter-label')).toHaveText('終章');
+    await page.getByRole('button', { name: /第3章へ進む/ }).click();
+    await expect(page.locator('#chapter-label')).toHaveText('第3章');
     await expect(page.locator('#hold-progress')).toHaveText('防衛 0 / 3');
     await expect(page.locator('#hold-status')).toHaveText('見張り台 · 無人');
     await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
@@ -313,25 +314,147 @@ test('play the campaign from chapter one through the ending', async ({ page }, t
     await expect(page.getByRole('heading', { name: '見張り台を守り抜いた！' })).toBeVisible();
     expect(await state()).toMatchObject({ chapterId: 3, holdTurns: 3, holdGoal: 3, winner: 'blue' });
     await reloadCampaign(page);
-    await page.getByRole('button', { name: /結末を見る/ }).click();
-    const ending = page.getByRole('dialog', { name: '境界に灯がともる' });
-    await expect(ending).toContainText('全3章クリア');
-    await page.screenshot({ path: testInfo.outputPath('campaign-ending.png'), fullPage: true });
+    await page.getByRole('button', { name: /第4章へ進む/ }).click();
+    const interlude = page.getByRole('dialog', { name: '境界に灯がともる' });
+    await expect(interlude).toContainText('第3章クリア');
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(ending).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('campaign-ending-mobile.png') });
-    await ending.getByRole('button', { name: 'タイトルへ' }).click();
-    await expect(titleMenu(page)).toContainText('全3章クリア');
-    await continueGame(page).click();
-    await expect(page.getByRole('button', { name: /結末を見る/ })).toBeFocused();
-    await page.getByRole('button', { name: '第1章から遊ぶ' }).click();
-    await titleMenu(page).getByRole('button', { name: '第1章から始める' }).click();
-    expect(await state()).toMatchObject({ chapterId: 1, turnNumber: 1, winner: null });
+    await expect(interlude.getByRole('button', { name: /第4章に出撃する/ })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath('watchtower-interlude-mobile.png') });
+    await interlude.getByRole('button', { name: '戦果に戻る' }).click();
+    expect(await state()).toMatchObject({ chapterId: 3, winner: 'blue' });
     expect(errors, errors.join('\n')).toEqual([]);
   } finally {
     await testInfo.attach('browser-errors', { body: errors.join('\n') || '(none)', contentType: 'text/plain' });
     await testInfo.attach('game-state', { body: JSON.stringify(await state().catch(() => null), null, 2), contentType: 'application/json' });
   }
+});
+
+test('continue a legacy victory through the sluice and the new ending', async ({ page }, testInfo) => {
+  test.setTimeout(160_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const legacy = initialState(3);
+  legacy.units.find(unit => unit.id === 'blue-1')!.x = 4;
+  legacy.holdTurns = 2;
+  legacy.holdGoal = 2;
+  legacy.turnNumber = 5;
+  legacy.winner = 'blue';
+  const v3 = { ...JSON.parse(encodeCheckpoint(legacy)), version: 3, holdGoal: undefined };
+  await page.addInitScript(({ key, checkpoint }) => {
+    if (!localStorage.getItem(key)) localStorage.setItem(key, checkpoint);
+  }, { key: checkpointKey, checkpoint: JSON.stringify(v3) });
+  const state = () => page.evaluate(() => window.__GAME_TEST__!.getState());
+  const board = page.locator('#game');
+  let capturedCommander = false;
+  const tile = async (x: number, y: number): Promise<void> => {
+    await board.scrollIntoViewIfNeeded();
+    await page.mouse.click(...await tilePosition(page, x, y));
+  };
+  const order = async (id: string, x: number, y: number, targetId?: string): Promise<void> => {
+    const unit = (await state()).units.find(unit => unit.id === id)!;
+    await tile(unit.x, unit.y);
+    await expect.poll(async () => (await state()).selectedId).toBe(id);
+    if (unit.x !== x || unit.y !== y) await tile(x, y);
+    await expect.poll(async () => (await state()).units.find(unit => unit.id === id)).toMatchObject({ x, y });
+    if (!targetId) return;
+    const target = (await state()).units.find(unit => unit.id === targetId)!;
+    await tile(target.x, target.y);
+    await page.getByRole('button', { name: '攻撃する' }).click();
+    if (targetId === 'red-4' && !capturedCommander) {
+      await expect(page.locator('#combat-stage')).toBeVisible();
+      await expect(page.locator('#duel-ground')).toHaveText('砦の石畳');
+      await expect(page.locator('#hud-right strong')).toHaveText('サイラス');
+      await page.screenshot({ path: testInfo.outputPath('fort-duel.png'), fullPage: true });
+      capturedCommander = true;
+    }
+    await expect.poll(async () => {
+      const attacker = (await state()).units.find(unit => unit.id === id);
+      return !attacker || attacker.attacked;
+    }).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
+  };
+  const end = async (): Promise<void> => {
+    const turn = (await state()).turnNumber;
+    await page.locator('#end-turn').click();
+    await expect.poll(async () => (await state()).turnNumber, { timeout: 15_000 }).toBe(turn + 2);
+    await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.isBusy())).toBe(false);
+  };
+  const [astel, lina, sera, io] = ['blue-1', 'blue-2', 'blue-3', 'blue-4'] as const;
+  await page.goto('./');
+  await continueGame(page).click();
+  await expect(page.locator('#hold-progress')).toHaveText('防衛 2 / 2');
+  await page.getByRole('button', { name: /第4章へ進む/ }).click();
+  await expect(page.getByRole('dialog', { name: '境界に灯がともる' })).toContainText('セラ');
+  await page.getByRole('button', { name: /第4章に出撃する/ }).click();
+  await expect(page.locator('#chapter-label')).toHaveText('第4章');
+  await expect(page.locator('#roster')).toContainText('セラ');
+  await expect(page.locator('#roster')).toContainText('イオ');
+  await expect(page.locator('#capture-progress')).toHaveText('確保 0 / 2');
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+  await page.screenshot({ path: testInfo.outputPath('sluice-start.png'), fullPage: true });
+  await order(astel, 2, 2);
+  await order(io, 4, 1, 'red-1');
+  await order(lina, 4, 4, 'red-3');
+  await end();
+  await order(io, 1, 1);
+  await order(astel, 4, 1);
+  await order(lina, 4, 4, 'red-3');
+  await end();
+  await order(astel, 5, 1, 'red-2');
+  await order(lina, 6, 4);
+  await expect(page.locator('#capture-progress')).toHaveText('確保 1 / 2');
+  expect((await state()).winner).toBeNull();
+  const partial = await state();
+  await reloadCampaign(page);
+  expect(await state()).toEqual(partial);
+  await end();
+  await order(astel, 6, 1);
+  await expect(page.getByRole('heading', { name: '水門が開いた！' })).toBeVisible();
+  expect((await state()).units.filter(unit => unit.team === 'blue')).toHaveLength(4);
+  await page.getByRole('button', { name: /終章へ進む/ }).click();
+  await expect(page.getByRole('dialog', { name: '流れが戻る朝' })).toContainText('サイラス');
+  await page.getByRole('button', { name: /終章に出撃する/ }).click();
+  await expect(page.locator('#chapter-label')).toHaveText('終章');
+  await expect(page.locator('#mission-objective')).toHaveText('監潮官サイラスを倒す');
+  expect((await state()).units).toHaveLength(8);
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+  await page.screenshot({ path: testInfo.outputPath('fort-start.png'), fullPage: true });
+  await order(astel, 2, 3);
+  await order(io, 4, 1, 'red-1');
+  await order(sera, 3, 3);
+  await order(lina, 4, 4, 'red-2');
+  await end();
+  await order(astel, 3, 1);
+  await order(io, 4, 1, 'red-4');
+  await order(sera, 4, 3);
+  await order(lina, 5, 4, 'red-2');
+  await end();
+  await order(io, 6, 0, 'red-3');
+  await order(lina, 6, 2, 'red-3');
+  await end();
+  await order(astel, 5, 1, 'red-4');
+  await order(io, 4, 1, 'red-4');
+  await order(sera, 6, 4);
+  await end();
+  await order(astel, 5, 1, 'red-4');
+  await order(io, 4, 1, 'red-4');
+  await order(sera, 6, 2, 'red-4');
+  await expect(page.getByRole('heading', { name: '観潮砦を奪還した！' })).toBeVisible();
+  expect(await state()).toMatchObject({ chapterId: 5, winner: 'blue' });
+  await reloadCampaign(page);
+  await page.getByRole('button', { name: /結末を見る/ }).click();
+  const ending = page.getByRole('dialog', { name: '水の先にある灯' });
+  await expect(ending).toContainText('全5章クリア');
+  await page.screenshot({ path: testInfo.outputPath('new-ending.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(ending.getByRole('button', { name: 'タイトルへ' })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('new-ending-mobile.png') });
+  await ending.getByRole('button', { name: 'タイトルへ' }).click();
+  await expect(titleMenu(page)).toContainText('全5章クリア');
+  await continueGame(page).click();
+  await expect(page.getByRole('button', { name: /結末を見る/ })).toBeFocused();
+  await page.getByRole('button', { name: '第1章から遊ぶ' }).click();
+  await titleMenu(page).getByRole('button', { name: '第1章から始める' }).click();
+  expect(await state()).toMatchObject({ chapterId: 1, turnNumber: 1, winner: null });
 });
 
 test.describe('touch screen', () => {

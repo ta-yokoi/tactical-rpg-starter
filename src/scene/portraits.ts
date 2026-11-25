@@ -12,6 +12,10 @@ const palettes: Record<string, Palette> = {
   'blue-escort': { dark: '#294a44', mid: '#477864', light: '#8eaa75', hair: '#4c3e36', hairLight: '#83654a', skin: '#bb8a66', shadow: '#925f51' },
   'red-1': { dark: '#51333c', mid: '#84505a', light: '#b37d68', hair: '#40383e', hairLight: '#736268', skin: '#c79574', shadow: '#9c6056' },
   'red-2': { dark: '#423140', mid: '#773f50', light: '#b3696e', hair: '#5e4b5b', hairLight: '#867086', skin: '#d9b09d', shadow: '#a3686c' },
+  'blue-3': { dark: '#1e4447', mid: '#377b75', light: '#a2c7a1', hair: '#343039', hairLight: '#6c5660', skin: '#e5ad81', shadow: '#a96a58' },
+  'blue-4': { dark: '#4c3f38', mid: '#9a704e', light: '#e7bb79', hair: '#384550', hairLight: '#70838c', skin: '#e4b48e', shadow: '#a97662' },
+  'red-3': { dark: '#44303d', mid: '#835764', light: '#d3a18a', hair: '#403137', hairLight: '#7d6366', skin: '#d7a188', shadow: '#986154' },
+  'red-4': { dark: '#37213c', mid: '#794159', light: '#d08493', hair: '#492b41', hairLight: '#7f6072', skin: '#e3ad91', shadow: '#a76a70' },
 };
 const cached = new Map<string, HTMLCanvasElement>();
 
@@ -38,23 +42,27 @@ export function drawPortrait(canvas: HTMLCanvasElement, id: string): void {
   requested.set(canvas, id);
   target.clearRect(0, 0, canvas.width, canvas.height);
   target.imageSmoothingEnabled = false;
-  if (cell === undefined) return;
+  const palette = palettes[id];
+  if (!palette) return;
 
   const paint = (image: HTMLImageElement): void => {
+    if (cell === undefined) return;
     target.clearRect(0, 0, canvas.width, canvas.height);
     target.drawImage(image, cell * PORTRAIT_SIZE, 0, PORTRAIT_SIZE, PORTRAIT_SIZE,
       0, 0, canvas.width, canvas.height);
   };
-  if (atlas) {
+  if (atlas && cell !== undefined) {
     paint(atlas);
     return;
   }
-  const portrait = cached.get(id) ?? createPortrait(palettes[id], id);
+  const portrait = cached.get(id) ?? createPortrait(palette, id);
   cached.set(id, portrait);
   target.drawImage(portrait, 0, 0, canvas.width, canvas.height);
-  void loading.then(image => {
-    if (image && requested.get(canvas) === id) paint(image);
-  });
+  if (cell !== undefined) {
+    void loading.then(image => {
+      if (image && requested.get(canvas) === id) paint(image);
+    });
+  }
 }
 
 function createPortrait(c: Palette, id: string): HTMLCanvasElement {
@@ -80,7 +88,18 @@ function createPortrait(c: Palette, id: string): HTMLCanvasElement {
   pixel(16, 15, 1, 1, c.mid); pixel(21, 14, 1, 1, c.mid);
   pixel(19, 16, 2, 1, c.shadow); pixel(18, 19, 3, 1, c.shadow);
   pixel(18, 28, 2, 2, linen);
-  if (id === 'blue-1') {
+  if (id === 'blue-3' || id === 'red-3') {
+    shape(c.dark, [7, 14], [9, 8], [14, 4], [23, 4], [27, 9], [27, 15], [24, 15], [23, 11], [14, 11], [11, 18]);
+    shape(c.light, [9, 11], [12, 6], [20, 5], [24, 8], [15, 8], [12, 12]);
+    pixel(9, 13, 2, 5, c.mid); pixel(19, 7, 4, 1, linen);
+  } else if (id === 'blue-4') {
+    shape(c.light, [7, 11], [9, 6], [15, 4], [22, 4], [26, 8], [24, 10], [16, 8], [11, 12]);
+    pixel(19, 5, 3, 3, '#91deed'); pixel(12, 19, 2, 4, linen);
+  } else if (id === 'red-4') {
+    shape(c.mid, [8, 12], [8, 4], [12, 6], [15, 3], [19, 6], [23, 2], [26, 10], [23, 12], [15, 10]);
+    shape(linen, [9, 10], [9, 5], [13, 8], [16, 5], [19, 8], [23, 4], [24, 10], [17, 9]);
+    pixel(18, 8, 2, 2, '#ac5178');
+  } else if (id === 'blue-1') {
     shape(c.light, [8, 11], [10, 5], [16, 2], [23, 3], [25, 7], [24, 9], [15, 8], [11, 13]);
     shape(c.mid, [8, 11], [13, 8], [22, 6], [25, 8], [24, 11], [15, 10], [12, 14]);
     pixel(16, 3, 6, 1, linen); pixel(11, 15, 1, 4, c.light);

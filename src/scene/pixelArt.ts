@@ -12,16 +12,20 @@ const clayShade = '#9b805c';
 
 export function createPixelArt(scene: Phaser.Scene): void {
   if (scene.textures.exists('battle-art')) return;
-  const texture = scene.textures.createCanvas('battle-art', TILE * (16 + mapUnitIds.length * mapFacings.length * mapPoses.length), TILE)!;
+  const columns = 16;
+  const total = 18 + mapUnitIds.length * mapFacings.length * mapPoses.length;
+  const texture = scene.textures.createCanvas('battle-art', TILE * columns, TILE * Math.ceil(total / columns))!;
   const context = texture.getContext();
-  let offset = 0;
-  const frame = (name: string, draw: (pixel: Pixel) => void): void => {
-    texture.add(name, 0, offset, 0, TILE, TILE);
+  let index = 0;
+  const frame = (name: string, draw: (pixel: Pixel, originX: number, originY: number) => void): void => {
+    const originX = index % columns * TILE;
+    const originY = Math.floor(index / columns) * TILE;
+    texture.add(name, 0, originX, originY, TILE, TILE);
     draw((x, y, width, height, color) => {
       context.fillStyle = color;
-      context.fillRect(offset + x, y, width, height);
-    });
-    offset += TILE;
+      context.fillRect(originX + x, originY + y, width, height);
+    }, originX, originY);
+    index++;
   };
   for (let variant = 0; variant < 4; variant++) {
     frame(`grass-${variant}`, p => {
@@ -142,12 +146,29 @@ export function createPixelArt(scene: Phaser.Scene): void {
     p(10, 5, 1, 3, '#fff0a3'); p(6, 15, 3, 1, '#b8b59b');
     p(12, 15, 3, 1, '#b8b59b'); p(7, 17, 6, 1, '#858979');
   });
+  frame('control', p => {
+    p(0, 0, 20, 20, grass);
+    p(0, 5, 20, 10, clay);
+    p(4, 5, 12, 12, '#384956'); p(5, 4, 10, 12, '#a4ad9a');
+    p(6, 6, 8, 8, '#426269'); p(7, 7, 6, 6, '#589492');
+    p(9, 7, 2, 6, '#bde9c4'); p(7, 9, 6, 2, '#bde9c4');
+    p(5, 14, 10, 2, '#64746b');
+  });
+  frame('paving', p => {
+    p(0, 0, 20, 20, '#4e5663');
+    for (const [x, y, w] of [[0, 0, 8], [9, 0, 11], [0, 5, 13], [14, 5, 6],
+      [0, 10, 6], [7, 10, 13], [0, 15, 11], [12, 15, 8]]) {
+      p(x, y, w, 4, '#858b8b');
+      p(x + 1, y, w - 2, 1, '#a2a69a');
+      p(x + 1, y + 3, w - 2, 1, '#737b82');
+    }
+  });
   for (const id of mapUnitIds) {
     for (const facing of mapFacings) {
       for (const pose of mapPoses) {
-        frame(`${id}-${facing}-${pose}`, () => {
+        frame(`${id}-${facing}-${pose}`, (_, x, y) => {
           context.save();
-          context.translate(offset, 0);
+          context.translate(x, y);
           drawMapUnit(context, id, facing, pose);
           context.restore();
         });

@@ -9,6 +9,9 @@ type Chapter = {
   units: readonly Unit[];
   escort?: { id: string; goal: Point };
   hold?: { point: Point; turns: number };
+  capture?: readonly Point[];
+  commander?: string;
+  aftermath?: { title: string; paragraphs: readonly string[] };
 };
 
 function unit(id: string, team: Unit['team'], x: number, y: number, hp: number): Unit {
@@ -51,10 +54,63 @@ export const chapters = {
       unit('red-1', 'red', 6, 2, 9), unit('red-2', 'red', 7, 4, 8),
     ],
     hold: { point: { x: 4, y: 2 }, turns: 3 },
+    aftermath: {
+      title: '境界に灯がともる',
+      paragraphs: [
+        '尾根の火を見て、ナギも川辺の灯を掲げた。二つの明かりは夜の底で応え合い、旅人たちに帰り道を知らせた。',
+        '「これで、朝の舟を出せるな」',
+        'だが舟が運んできたのは、下流から逃れた人々だった。水門が閉ざされ、村へ流れる水が止まっている。水路を守る盾兵セラと、潮の変化を読むイオが、一行を水門へ案内する。',
+      ],
+    },
+  },
+  4: {
+    title: '閉ざされた水門',
+    district: '双塔水門',
+    briefing: 'セラとイオが合流した。二つの制御台を同時に確保し、水路を開け。',
+    objective: '二つの制御台を味方で同時に占める',
+    map: ['..c~~~c.', '===++=u.', '...~~~..', '.c.~~~c.', '===++=u.', '..c~~~..'],
+    units: [
+      unit('blue-1', 'blue', 1, 1, 11), unit('blue-2', 'blue', 2, 4, 9),
+      unit('blue-3', 'blue', 0, 4, 12), unit('blue-4', 'blue', 2, 0, 10),
+      unit('red-1', 'red', 6, 1, 7), unit('red-3', 'red', 6, 4, 9),
+      unit('red-2', 'red', 7, 2, 7),
+    ],
+    capture: [{ x: 6, y: 1 }, { x: 6, y: 4 }],
+    aftermath: {
+      title: '流れが戻る朝',
+      paragraphs: [
+        '二つの制御台が応え合い、溜まっていた水が下流へ走った。セラは水門に刻まれた封印を調べ、上流の観潮砦と同じ印を見つけた。',
+        'イオが水門脇の記録を広げる。監潮官サイラスは、古い水路を守るという名目で、下流の村を水から切り離そうとしていた。',
+        '「今度は、水が届くところまで見届けよう」リナの言葉に、アステルは砦へ続く道を選んだ。',
+      ],
+    },
+  },
+  5: {
+    title: '潮がひらく道',
+    district: '観潮砦',
+    briefing: '両翼から砦へ進み、監潮官サイラスを倒せ。石垣が術の経路を遮る。',
+    objective: '監潮官サイラスを倒す',
+    map: ['c..#..c.', 'pppppppp', '..p##pcp', '..p..#pp', 'pppppppp', '.c..#..c'],
+    units: [
+      unit('blue-1', 'blue', 1, 1, 11), unit('blue-2', 'blue', 1, 4, 9),
+      unit('blue-3', 'blue', 2, 4, 12), unit('blue-4', 'blue', 2, 1, 10),
+      unit('red-1', 'red', 6, 1, 8), unit('red-2', 'red', 6, 4, 8),
+      unit('red-3', 'red', 6, 3, 10), unit('red-4', 'red', 7, 2, 13),
+    ],
+    commander: 'red-4',
+    aftermath: {
+      title: '水の先にある灯',
+      paragraphs: [
+        '砦が静まると、サイラスは水門の封印を解いた。セラは封印の鍵を川沿いの村に一つずつ返し、イオは水路の記録に今朝の水位を書き足した。',
+        '数日後、峠の見張り台に旅人の灯がともった。ナギの舟が下流から戻り、リナが岸から手を振る。',
+        'かつて境界だった川を、今は暮らしの荷を積んだ舟が行き交う。アステルは剣を収め、灯のあるほうへ歩き出した。',
+      ],
+    },
   },
 } satisfies Record<number, Chapter>;
 
 export type ChapterId = keyof typeof chapters;
+export const lastChapter = 5;
 
 export function isChapterId(id: unknown): id is ChapterId {
   return typeof id === 'number' && Object.hasOwn(chapters, id);
@@ -62,6 +118,11 @@ export function isChapterId(id: unknown): id is ChapterId {
 
 export function chapter(id: ChapterId): Chapter {
   return chapters[id];
+}
+
+export function nextChapter(id: ChapterId): ChapterId | undefined {
+  const next = id + 1;
+  return isChapterId(next) ? next : undefined;
 }
 
 const terrains = {
@@ -76,6 +137,8 @@ const terrains = {
   '+': { name: '橋', frame: 'bridge' },
   g: { name: '灯火台', frame: 'beacon' },
   t: { name: '見張り台', frame: 'watchtower' },
+  u: { name: '制御台', frame: 'control' },
+  p: { name: '石畳', frame: 'paving' },
 } as const;
 
 export function chapterTerrain(id: ChapterId, { x, y }: Point) {

@@ -54,7 +54,7 @@ export function initialState(chapterId: ChapterId = 1, formation: Formation = de
 }
 
 export function battleWinner(state: GameState): Team | null {
-  const { escort, hold } = chapter(state.chapterId);
+  const { escort, hold, capture, commander } = chapter(state.chapterId);
   if (escort) {
     const traveler = state.units.find(unit => unit.id === escort.id && unit.hp > 0);
     if (!traveler) return 'red';
@@ -62,6 +62,8 @@ export function battleWinner(state: GameState): Team | null {
   }
   if (!state.units.some(unit => unit.team === 'blue' && unit.hp > 0)) return 'red';
   if (hold) return state.holdTurns >= state.holdGoal && unitAt(state, hold.point)?.team === 'blue' ? 'blue' : null;
+  if (capture) return capture.every(point => unitAt(state, point)?.team === 'blue') ? 'blue' : null;
+  if (commander) return state.units.some(unit => unit.id === commander && unit.hp > 0) ? null : 'blue';
   if (!state.units.some(unit => unit.team === 'red' && unit.hp > 0)) return 'blue';
   return null;
 }
@@ -190,7 +192,7 @@ export function reduceGame(state: GameState, action: Action): GameState {
     if (!movementRange(next, selected.id).some(point => point.x === action.x && point.y === action.y)) return state;
     selected.x = action.x; selected.y = action.y; selected.moved = true;
     next.winner = battleWinner(next);
-    next.message = next.winner ? 'ナギが灯火台に到着しました！' : unitProfile(selected.id).reach === 0
+    next.message = next.winner ? chapter(state.chapterId).capture ? '両方の制御台を確保しました！' : 'ナギが灯火台に到着しました！' : unitProfile(selected.id).reach === 0
       ? 'ナギが移動しました。仲間で次の道を確保しましょう。'
       : '移動しました。射程内の敵を攻撃できます。';
     return next;
