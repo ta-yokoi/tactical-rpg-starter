@@ -25,7 +25,7 @@ const campaignClear = `全${lastChapter}章クリア`;
 type UnitView = {
   body: Phaser.GameObjects.Container;
   sprite: Phaser.GameObjects.Sprite;
-  health: Phaser.GameObjects.Graphics;
+  status: Phaser.GameObjects.Graphics;
   facing: MapFacing;
 };
 
@@ -325,6 +325,9 @@ export class BattleScene extends Phaser.Scene {
     this.cursorLayer.clear();
     const detail = element('tile-detail');
     const chip = element('terrain-chip');
+    if (!this.busy) {
+      for (const unit of this.state.units) this.drawUnitStatus(this.views.get(unit.id)!, unit);
+    }
     if (!this.cursor || this.busy || this.state.winner) {
       chip.hidden = true;
       detail.textContent = this.state.winner ? '戦闘終了' : this.busy ? '行動中…' : '青の味方を選択';
@@ -346,6 +349,7 @@ export class BattleScene extends Phaser.Scene {
       const forecast = selected && combatForecast(this.state, selected, unit.id);
       const cover = terrainAt(this.state, unit);
       detail.textContent = `${coordinates} · ${unitProfile(unit.id).name} · HP ${unit.hp}/${unit.maxHp}` +
+        (unit.team === 'blue' && unit.attacked ? ' · 行動済み' : '') +
         (cover.cover ? ` · ${cover.name}` : '') +
         (forecast ? ` · 与ダメージ ${forecast.opening.damage}／反撃 ${forecast.counter?.damage ?? 'なし'}` : '');
       return;
@@ -683,7 +687,7 @@ export class BattleScene extends Phaser.Scene {
     } else if (!hit) {
       this.soundKit.play('select');
     }
-    for (const unit of next.units) this.updateHealth(this.views.get(unit.id)!, unit);
+    for (const unit of next.units) this.updateUnitView(this.views.get(unit.id)!, unit);
   }
 
   private combatGear(unit: Unit): string {
@@ -709,7 +713,7 @@ export class BattleScene extends Phaser.Scene {
     element('combat-log').textContent = this.lastHit;
     this.soundKit.play('hurt');
     const victim = this.views.get(target.id)!;
-    this.updateHealth(victim, { ...target, hp: remainingHp });
+    this.drawUnitStatus(victim, { ...target, hp: remainingHp });
     await this.combatStage.recover(strike);
     if (remainingHp === 0) {
       this.combatStage.fall(target.id);
@@ -724,32 +728,41 @@ export class BattleScene extends Phaser.Scene {
     this.views.clear();
     for (const unit of this.state.units) {
       const { x, y } = center(unit);
-      const shadow = this.add.ellipse(0, 6, 14, 3, 0x18263b, .6);
+      const shadow = this.add.ellipse(0, 6, 14, 3, 0x131e2e, .64);
       const sprite = this.add.sprite(0, -2, 'battle-art', `${unit.id}-south-idle`);
-      const health = this.add.graphics();
-      const body = this.add.container(x, y, [shadow, sprite, health]).setDepth(2);
-      const view: UnitView = { body, sprite, health, facing: 'south' };
+      const status = this.add.graphics();
+      const body = this.add.container(x, y, [shadow, sprite, status]).setDepth(2);
+      const view: UnitView = { body, sprite, status, facing: 'south' };
       this.views.set(unit.id, view);
-      this.updateHealth(view, unit);
+      this.updateUnitView(view, unit);
     }
   }
 
-  private updateHealth(view: UnitView, unit: Unit): void {
-    const bar = view.health.clear();
-    const ally = unit.team === 'blue';
-    const teamColor = ally ? 0x9ee9ec : 0xffb491;
-    const hp = Math.round(14 * unit.hp / unit.maxHp);
-    bar.fillStyle(0x172230).fillRect(-8, 7, 16, 3).fillRect(-10, 3, 5, 5);
-    bar.fillStyle(0x4b5161).fillRect(-7, 8, 14, 1);
-    bar.fillStyle(unit.attacked ? 0xb5aeb9 : teamColor).fillRect(-7, 8, hp, 1);
-    bar.fillStyle(teamColor);
-    if (ally) bar.fillRect(-9, 4, 3, 3);
-    else bar.fillRect(-8, 4, 1, 3).fillRect(-9, 5, 3, 1);
-    if (unit.attacked) bar.fillStyle(0x172230).fillRect(-8, 5, 1, 1);
+  private updateUnitView(view: UnitView, unit: Unit): void {
+    this.drawUnitStatus(view, unit);
     if (!view.sprite.anims.isPlaying) {
       const poised = unit.id === this.state.selectedId && !unit.attacked;
       view.sprite.setFrame(`${unit.id}-${view.facing}-${poised ? 'ready' : 'idle'}`);
     }
+  }
+
+  private drawUnitStatus(view: UnitView, unit: Unit): void {
+    const status = view.status.clear();
+    const ally = unit.team === 'blue';
+    const teamColor = ally ? 0x9ee9ec : 0xffb491;
+    const backing = 0x172230;
+    const focused = !this.busy && this.cursor !== null && same(unit, this.cursor);
+    if (unit.hp < unit.maxHp || unit.id === this.state.selectedId || focused) {
+      const hp = Math.round(12 * unit.hp / unit.maxHp);
+      status.fillStyle(backing).fillRect(-4, 7, 14, 3);
+      status.fillStyle(0x4b5161).fillRect(-3, 8, 12, 1);
+      status.fillStyle(unit.attacked ? 0xb5aeb9 : teamColor).fillRect(-3, 8, hp, 1);
+    }
+    status.fillStyle(backing).fillRect(-9, 5, 5, 5);
+    status.fillStyle(teamColor);
+    if (ally) status.fillRect(-8, 6, 3, 3);
+    else status.fillRect(-7, 6, 1, 3).fillRect(-8, 7, 3, 1);
+    if (unit.attacked) status.fillStyle(backing).fillRect(-7, 7, 1, 1);
   }
 
   private showBanner(phase: string, title: string): void {

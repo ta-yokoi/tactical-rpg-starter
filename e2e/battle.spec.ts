@@ -691,6 +691,56 @@ test('map movement plays the walking cycle before returning to ready', async ({ 
   expect(await page.evaluate(() => window.__GAME_TEST__!.getState().units[1])).toMatchObject({ x: 4, y: 4, moved: true });
 });
 
+test('map icons reveal HP on focus and keep wounded units visible', async ({ page }, testInfo) => {
+  const battle = initialState(5);
+  const shield = battle.units.find(unit => unit.id === 'blue-3')!;
+  const tide = battle.units.find(unit => unit.id === 'blue-4')!;
+  const guard = battle.units.find(unit => unit.id === 'red-3')!;
+  tide.moved = tide.attacked = true;
+  guard.hp -= 2;
+  await page.addInitScript(({ key, checkpoint }) => localStorage.setItem(key, checkpoint),
+    { key: checkpointKey, checkpoint: encodeCheckpoint(battle) });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('./');
+  await continueGame(page).click();
+  await expect(page.locator('#phase-banner')).not.toHaveClass(/visible/);
+
+  const board = page.locator('#game canvas');
+  const hpPixel = async (unit: { x: number; y: number }): Promise<number[]> => {
+    const screenshot = await board.screenshot();
+    return page.evaluate(async ({ png, x, y, width }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${png}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      const scale = image.width / width;
+      return Array.from(context.getImageData((x + 1) * scale, (y + 8) * scale, 1, 1).data).slice(0, 3);
+    }, { png: screenshot.toString('base64'), ...center(unit), width: WIDTH });
+  };
+  await expect.poll(() => hpPixel(guard)).toEqual([255, 180, 145]);
+  await expect.poll(() => hpPixel(shield)).not.toEqual([158, 233, 236]);
+  await board.screenshot({ path: testInfo.outputPath('map-icons-fort.png') });
+
+  await page.mouse.move(...await tilePosition(page, shield.x, shield.y));
+  await expect(page.locator('#tile-detail')).toContainText(`セラ · HP ${shield.hp}/${shield.maxHp}`);
+  await expect.poll(() => hpPixel(shield)).toEqual([158, 233, 236]);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => hpPixel(shield)).not.toEqual([158, 233, 236]);
+  await page.mouse.click(...await tilePosition(page, shield.x, shield.y));
+  await expect.poll(() => page.evaluate(() => window.__GAME_TEST__!.getUnitFrame('blue-3'))).toBe('blue-3-south-ready');
+  await page.mouse.move(...await tilePosition(page, tide.x, tide.y));
+  await expect(page.locator('#tile-detail')).toContainText(`イオ · HP ${tide.hp}/${tide.maxHp} · 行動済み`);
+  await expect.poll(() => hpPixel(shield)).toEqual([158, 233, 236]);
+  await expect.poll(() => hpPixel(tide)).toEqual([181, 174, 185]);
+  await page.setViewportSize({ width: 320, height: 780 });
+  await expect(page.locator('#game')).toHaveAttribute('data-zoom', '1');
+  await page.screenshot({ path: testInfo.outputPath('map-icons-mobile-320.png'), fullPage: true });
+});
+
 test('reduced motion keeps both hits and HP readable', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });

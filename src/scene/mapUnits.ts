@@ -20,15 +20,12 @@ export const mapWalkCycle = ['step-a', 'pass', 'step-b', 'pass'] as const;
 type MapPose = typeof mapPoses[number];
 
 type UnitId = keyof typeof palettes;
-const recruits = { 'blue-3': 'blue-1', 'blue-4': 'blue-2', 'red-3': 'red-1', 'red-4': 'blue-1' } as const;
-type Recruit = keyof typeof recruits;
-type BaseId = Exclude<UnitId, Recruit>;
 type Frame = readonly string[];
 type Palette = Record<string, string>;
 const common = { '#': '#222535', s: '#efb58f', h: '#b37660', c: '#849bad' };
 
 // The shared palette keeps the underlit side cool and the light-facing edges warm.
-const front: Record<BaseId, Frame> = {
+const front: Record<UnitId, Frame> = {
   'blue-1': [
     '........#a#',
     '......##aa##......#',
@@ -134,9 +131,93 @@ const front: Record<BaseId, Frame> = {
     '....####d###',
     '......###.##',
   ],
+  'blue-3': [
+    '........###',
+    '......##gag##',
+    '.....#laggal#',
+    '.....#alwlma#',
+    '.....#mlccml#',
+    '......#shss#',
+    '....##l#hh#l##',
+    '...#aa##ccmmaa#',
+    '..#awwwww#lmdl#',
+    '..#wlaaalw#ldm#',
+    '..#wlamalw#mdm#',
+    '..#wlmgalw#md#',
+    '..#wllmall#gg#',
+    '...#wllld#dm#',
+    '....#wld#lmd#',
+    '.....###m#dm#',
+    '......#c#.#c#',
+    '.....#dm#.#md#',
+    '.....####.####',
+  ],
+  'blue-4': [
+    '........##',
+    '......##ag##',
+    '.....#waaagl#.....#',
+    '....#waawllm#....#g',
+    '....#wal#ssm#...#gw',
+    '...#awll#ssh#...#ga',
+    '...#wllm##hh#....#t',
+    '..#al##glll##...#t#',
+    '.#al#gwgggga#...#t#',
+    '.#l#gglmd#ld###sh#',
+    '.###g#lmdmd#dam#t#',
+    '...#g#aldmll#...#t',
+    '....#lalmldd#...#t',
+    '...#lalmlddm#...#t',
+    '...#almmdmdm#...#t',
+    '..#almmddmdl#..###',
+    '..###amdldm##',
+    '.....##c#dc#',
+    '.....###.###',
+  ],
+  'red-3': [
+    '.......####',
+    '......#ggmm#....####',
+    '.....##laaam#..#wwcc',
+    '....#gllmmm#...#wccc',
+    '....#lmlccm#...##cc#',
+    '.....#hsshh#....##t#',
+    '....##ddhh##.....#t',
+    '..##almddml###...#t',
+    '.#aallmdgmlmaa#..#t',
+    '.#ammdmdgdldml##sh#',
+    '.##mmddmgdmdd##h##',
+    '...#dddgggdd#..#t#',
+    '...##lmdmdmd#..###',
+    '....#llddmdl#',
+    '....#mlddmdd#',
+    '....#dd#.##d#',
+    '....#c#...#c#',
+    '...#dm#...#md#',
+    '...####...####',
+  ],
+  'red-4': [
+    '......#.#.#',
+    '.....#g#g#g#',
+    '.....#ggwgg#......#',
+    '.....#mlalm#.....#w',
+    '.....#ms#sd#....#wc',
+    '......#ssh#.....#c#',
+    '.....##hh##....#wc#',
+    '....#wggggw#...#c#',
+    '...#cwlmmmcw#.#g#',
+    '...#cwmccmcw##sh#',
+    '...#lwmdgmdw#h#',
+    '...#lwmgdgdmw##',
+    '..#lwwmgwgdmww#',
+    '..#lmwmgggdmwm#',
+    '..#lm#mdldm#md#',
+    '.##md#mddd#dm#',
+    '...##d#..#d##',
+    '.....#c#.#c#',
+    '.....###.###',
+  ],
 };
 
-const profile: Record<BaseId, Frame> = {
+const profile: Record<UnitId, Frame> = {
   'blue-1': [
     '........#a#',
     '......##aa##......#',
@@ -242,10 +323,94 @@ const profile: Record<BaseId, Frame> = {
     '.....###dd##',
     '......###.##',
   ],
+  'blue-3': [
+    '........###',
+    '......##gag##',
+    '.....#lagaal#',
+    '.....#amwwll#',
+    '.....#mccmll#',
+    '......#mssh#',
+    '.....##m#hh##',
+    '....#mlcmmmla#',
+    '...#mmlc#wwww#',
+    '...#mlmd#wlaaw#',
+    '...#lmd#wllmaw#',
+    '...#mmd#wlgmaw#',
+    '....#md#wllmw#',
+    '....#mm#wlmw#',
+    '.....#dm#ww#',
+    '.....#dd###',
+    '......#c#.#c#',
+    '.....#md#.#dm#',
+    '.....####.####',
+  ],
+  'blue-4': [
+    '.......###',
+    '.....##agg##',
+    '....#waawagl#.....#',
+    '....#waawmls#....#g',
+    '...#waawld#s#...#gw',
+    '...#wawlm##h#...#ga',
+    '..#wawldd###h#...#t',
+    '..#awl#ggll##...#t#',
+    '.#awl#ggggld#...#t#',
+    '.#al#glgmlald###sh#',
+    '.###gmldd#dl##..#t',
+    '...#galmdmld#...#t',
+    '....#almdmdd#...#t',
+    '...#almdmldm#...#t',
+    '...#almdmldm#...#t',
+    '..#almdmdmml#..###',
+    '..###mdddld##',
+    '.....#c##dc#',
+    '.....###.###',
+  ],
+  'red-3': [
+    '.......####',
+    '......#ggmm#.....###',
+    '.....##aallm#...#wwc',
+    '....#gllmcmm#..#wccc',
+    '....#lmmc#ss#...#cc#',
+    '.....#lm##sh#....#t',
+    '.....###d#hh#....#t',
+    '...##almmdl##....#t',
+    '..#aallmmmlma#...#t',
+    '..#ammdmdgldm###sh',
+    '..##mmdddgmdml##h#',
+    '....#ddmdggdd#.#t#',
+    '....#lmdmgd##..###',
+    '....#llddmd#',
+    '....#mld#mdd#',
+    '....#dd#.#dd#',
+    '.....#c#..#c#',
+    '....#dm#..#md#',
+    '....####..####',
+  ],
+  'red-4': [
+    '......#.#.#',
+    '.....#g#g#g#',
+    '.....#ggggw#......#',
+    '....#mlalmm#.....#w',
+    '....#lmdss#.....#wc',
+    '....#md#sh#.....#c#',
+    '...#mlw##h##...#wc#',
+    '...#lwgggwll#..#c#',
+    '..#lwwlmmmdc#.#g#',
+    '..#lwwlmdgmd##sh#',
+    '..#lwwmddgmld#h#',
+    '..#lwmmcddmml##',
+    '..#lwmmdgmdm#',
+    '.#lmwmddgdmd#',
+    '.#lmwmld#ld#',
+    '.##mmd#.#dd#',
+    '..####..#c#',
+    '.....#c##md#',
+    '.....###.###',
+  ],
 };
 
 // Rear views replace the eyes and front-facing headgear with hair, plate or fabric.
-const rearHead: Record<BaseId, Frame> = {
+const rearHead: Record<UnitId, Frame> = {
   'blue-1': [
     '........#a#', '......##aa##', '.....#laawld#', '.....#lmdald#',
     '.....#lmdmdd#', '......#lmdm#', '.....#m#dd#m#',
@@ -266,10 +431,22 @@ const rearHead: Record<BaseId, Frame> = {
     '........##', '.......#la#', '......#lamd#', '.....#lamldd#',
     '.....#amdlmdd#', '....#ladmlmmd#', '....#lmdmlmmd#', '....#amdmlmmd#',
   ],
+  'blue-3': [
+    '........###', '......##gag##', '.....#lagaal#', '.....#lammal#', '.....#mlddlm#', '......#lmml#', '....##l#dd#l##',
+  ],
+  'blue-4': [
+    '........##', '......##ag##', '.....#waaagl#', '....#waawllm#', '....#walwalml#', '...#walwalmd#', '...#allmmld#', '..#al##glll##',
+  ],
+  'red-3': [
+    '.......####', '......#ggmm#', '.....##laaam#', '....#gllmmm#', '....#lmlmlm#', '.....#dmdl#', '....##ddmd##',
+  ],
+  'red-4': [
+    '......#.#.#', '.....#g#g#g#', '.....#ggwgg#', '.....#mlalm#', '.....#mldlm#', '......#ldd#', '.....##md##',
+  ],
 };
 
 // Columns 15–19 hold the raised weapon, staff or lantern in each unit's ready pose.
-const readyGear: Record<BaseId, Frame> = {
+const readyGear: Partial<Record<UnitId, Frame>> = {
   'blue-1': [
     '.....', '.....', '....#', '...#w', '..#wc', '..#c#', '.#wc#', '.#c#.', '#g#..', '#g#..',
   ],
@@ -285,10 +462,19 @@ const readyGear: Record<BaseId, Frame> = {
   'red-2': [
     '...#.', '..#g#', '.#gw#', '#ggg#', '.###.', '.#t#.', '.#t#.', '.#t#.',
   ],
+  'blue-4': [
+    '...#', '..#g#', '.#gag', '#gwwg', '.#ga#', '..#t#', '.#t#', '.#t#',
+  ],
+  'red-3': [
+    '.####', '#wwcc', '#wccc', '#cccd', '.####', '..#t#', '..#t#', '.#t#',
+  ],
+  'red-4': [
+    '.....', '....#', '...#w', '...#c', '..#w#', '..#c#', '.#wc#', '.#c#', '#g#', '#g#',
+  ],
 };
 
 // Travel gear sits close to the body before joining the base frame at the hand.
-const walkingGear: Record<BaseId, Frame> = {
+const walkingGear: Partial<Record<UnitId, Frame>> = {
   'blue-1': [
     '.....', '.....', '.....', '.....', '....#', '...#w', '...#c', '..#wc',
   ],
@@ -304,31 +490,44 @@ const walkingGear: Record<BaseId, Frame> = {
   'red-2': [
     '.....', '.....', '....#', '...#g', '..#gw', '..###', '..#t#', '.#t#.',
   ],
+  'blue-4': [
+    '.....', '.....', '.....', '..##', '.#gw#', '.#ga#', '..#t#', '..#t#',
+  ],
+  'red-3': [
+    '.....', '.....', '.####', '#wwcc', '#wccc', '.###d', '..#t#', '..#t#',
+  ],
+  'red-4': [
+    '.....', '.....', '.....', '.....', '....#', '...#w', '...#c', '..#wc',
+  ],
 };
 
-const helmets: Record<Recruit, Frame> = {
-  'blue-3': ['.......#g#', '......#aga#', '.....#laaal#', '.....#amcma#', '.....#mcccm#'],
-  'blue-4': ['........##', '......##ag##', '.....#waaaml#', '.....#almssm#', '....#alm#ssml#'],
-  'red-3': ['......#..#', '.....#g##g#', '.....#lmmmld#', '.....#mlclmd#', '.....#cccch#'],
-  'red-4': ['......#.#.#', '......#g#g#', '.....#ggggld#', '.....#lmcmd#', '.....#adssdd#'],
-};
+// The tower shield stays at the arm in transit and rises to cover the chest in ready.
+const raisedShield = {
+  front: [
+    '..#wwwww#amma#', '..#waaalw#mmdl#', '..#wamalw#ldm#',
+    '..#wagalw#mdm#', '..#wllalw#md#', '...#wllw#dgg#',
+    '....#ww#ldmd#', '.....##d#lmd#',
+  ],
+  side: [
+    '....#ml#wwww#', '...#mml#wlaaw#', '...#ml#wllmaw#',
+    '...#lm#wlgmaw#', '...#mm#wllmw#', '....#md#wlmw#',
+    '....#mdd#ww#', '.....#dmd##',
+  ],
+} as const;
 
 export function drawMapUnit(context: CanvasRenderingContext2D, id: UnitId, facing: MapFacing, pose: MapPose): void {
   const colors: Palette = { ...common, ...palettes[id] };
   const north = facing === 'north';
-  const recruit = Object.hasOwn(recruits, id) ? id as Recruit : undefined;
-  const base = recruit ? recruits[recruit] : id as BaseId;
-  const frame = facing === 'side' ? profile[base] : front[base];
+  const frame = facing === 'side' ? profile[id] : front[id];
   const step = pose === 'step-a' ? -1 : pose === 'step-b' ? 1 : 0;
   const passing = pose === 'pass';
   const settle = pose === 'idle' || passing ? 1 : 0;
-  const equipmentFrames = pose === 'ready' ? readyGear[base] : step || passing ? walkingGear[base] : undefined;
+  const equipmentFrames = pose === 'ready' ? readyGear[id] : step || passing ? walkingGear[id] : undefined;
+  const shield = id === 'blue-3' && pose === 'ready' ? raisedShield[facing === 'side' ? 'side' : 'front'] : undefined;
   frame.forEach((frontRow, y) => {
-    const newHelmet = recruit && helmets[recruit][y];
-    const head = north ? rearHead[base][y] : newHelmet;
-    const rearRow = north && y <= 2 && newHelmet ? newHelmet : head;
+    const rearRow = north ? rearHead[id][y] : undefined;
     const equipment = equipmentFrames?.[y];
-    const body = rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15);
+    const body = shield?.[y - 7] ?? (rearRow === undefined ? frontRow : rearRow.padEnd(15, '.') + frontRow.slice(15));
     const row = equipment === undefined ? body : body.slice(0, 15).padEnd(15, '.') + equipment;
     for (let x = 0; x < row.length; x++) {
       const symbol = row[x];
